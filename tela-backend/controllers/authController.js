@@ -184,7 +184,17 @@ export const resetPassword = async (req, res) => {
 // @access  Private/Freelancer
 export const inviteClient = async (req, res) => {
   try {
-    const { name, email } = req.body;
+    const { name, email, company, phone } = req.body;
+
+    // Check if client already exists for this freelancer
+    const existingClient = await Client.findOne({ 
+      freelancer: req.user._id, 
+      email 
+    });
+    
+    if (existingClient) {
+      return res.status(400).json({ success: false, message: 'You have already invited this client' });
+    }
 
     const userExists = await User.findOne({ email });
     if (userExists) {
@@ -202,17 +212,56 @@ export const inviteClient = async (req, res) => {
       emailVerificationToken: inviteToken
     });
 
-    await sendEmail({
-      email: clientUser.email,
-      subject: 'Invitation to Tela',
-      html: emailTemplates.clientInvite(name, inviteToken)
+    // Create Client record with pending status
+    const client = await Client.create({
+      freelancer: req.user._id,
+      name,
+      email,
+      company: company || '',
+      phone: phone || '',
+      status: 'pending',
+      invitedUser: clientUser._id
     });
 
-    res.status(201).json({
-      success: true,
-      message: 'Client invited successfully',
-      data: { email, inviteToken }
-    });
+    // Send email from verified SendGrid email, but replies go to freelancer
+    const freelancer = req.user;
+    const inviteUrl = `${process.env.CLIENT_URL}/set-password/${inviteToken}`;
+    
+    try {
+      await sendEmail({
+        email: clientUser.email,
+        subject: `${freelancer.name} invited you to collaborate on Tela`,
+        html: emailTemplates.clientInviteFromFreelancer(name, inviteUrl, freelancer.name),
+        fromName: freelancer.name,
+        fromEmail: process.env.SENDGRID_FROM_EMAIL, // Send from verified email
+        replyTo: freelancer.email // Replies go to freelancer's actual email
+      });
+      
+      console.log(`✓ Invitation sent from ${freelancer.email} to ${clientUser.email}`);
+      
+      const populatedClient = await Client.findById(client._id).populate('invitedUser', 'name email');
+      
+      res.status(201).json({
+        success: true,
+        message: 'Client invited successfully. Invitation email sent.',
+        data: populatedClient
+      });
+    } catch (emailError) {
+      console.error('Email sending failed:', emailError.message);
+      
+      // Client is created but email failed
+      const populatedClient = await Client.findById(client._id).populate('invitedUser', 'name email');
+      
+      res.status(201).json({
+        success: true,
+        message: 'Client created but email failed to send. You can share the invite link manually.',
+        data: { 
+          client: populatedClient,
+          inviteUrl: inviteUrl,
+          emailError: emailError.message
+        }
+      });
+    }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -236,18 +285,26 @@ export const setPassword = async (req, res) => {
     user.emailVerificationToken = undefined;
     await user.save();
 
+    // Update client status to active
+    await Client.findOneAndUpdate(
+      { invitedUser: user._id },
+      { 
+        status: 'active',
+        joinedAt: new Date()
+      }
+    );
+
     const token = generateToken(user._id);
 
     res.json({
       success: true,
+      message: 'Password set successfully',
       data: {
-        token,
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role
-        }
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        token
       }
     });
   } catch (error) {
@@ -271,20 +328,69 @@ export const getMe = async (req, res) => {
 // @access  Private
 export const updateProfile = async (req, res) => {
   try {
-    const { name, bio, phone, location, businessName, brandColor } = req.body;
+    const { name, email, bio, phone, location, businessName, tagline, brandColor } = req.body;
 
     const user = await User.findById(req.user._id);
 
-    if (name) user.name = name;
-    if (bio) user.bio = bio;
-    if (phone) user.phone = phone;
-    if (location) user.location = location;
-    if (businessName) user.businessName = businessName;
-    if (brandColor) user.brandColor = brandColor;
+    // Update fields - allow empty strings
+    if (name !== undefined) user.name = name;
+    if (email !== undefined) {
+      // Check if email already exists
+      const emailExists = await User.findOne({ email, _id: { $ne: user._id } });
+      if (emailExists) {
+        return res.status(400).json({ success: false, message: 'Email already in use' });
+      }
+      user.email = email;
+    }
+    if (bio !== undefined) user.bio = bio;
+    if (phone !== undefined) user.phone = phone;
+    if (location !== undefined) user.location = location;
+    if (businessName !== undefined) user.businessName = businessName;
+    if (brandColor !== undefined) user.brandColor = brandColor;
 
     await user.save();
 
     res.json({ success: true, data: user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Configure email settings (for sending from user's email)
+// @route   PUT /api/auth/configure-email
+// @access  Private
+export const configureEmail = async (req, res) => {
+  try {
+    const { smtpHost, smtpPort, smtpUser, smtpPassword } = req.body;
+
+    if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Please provide all email configuration details' 
+      });
+    }
+
+    const user = await User.findById(req.user._id).select('+emailConfig.smtpPassword');
+
+    user.emailConfig = {
+      smtpHost,
+      smtpPort: parseInt(smtpPort),
+      smtpUser,
+      smtpPassword,
+      isConfigured: true
+    };
+
+    await user.save();
+
+    // Return without sensitive password
+    const userResponse = user.toObject();
+    delete userResponse.emailConfig.smtpPassword;
+
+    res.json({ 
+      success: true, 
+      message: 'Email configuration saved successfully',
+      data: userResponse 
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

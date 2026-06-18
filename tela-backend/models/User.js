@@ -53,6 +53,30 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: '#3B82F6'
   },
+  // Email SMTP Configuration (for freelancers to send emails from their account)
+  emailConfig: {
+    smtpHost: {
+      type: String,
+      default: ''
+    },
+    smtpPort: {
+      type: Number,
+      default: 587
+    },
+    smtpUser: {
+      type: String,
+      default: ''
+    },
+    smtpPassword: {
+      type: String,
+      default: '',
+      select: false // Don't return in queries by default
+    },
+    isConfigured: {
+      type: Boolean,
+      default: false
+    }
+  },
   isEmailVerified: {
     type: Boolean,
     default: false

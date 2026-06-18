@@ -176,7 +176,24 @@ export const deleteClient = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Client not found' });
     }
 
+    // Check if client has any projects or invoices
+    const hasProjects = await Project.countDocuments({ client: client._id });
+    const hasInvoices = await Invoice.countDocuments({ client: client._id });
+
+    if (hasProjects > 0 || hasInvoices > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Cannot delete client with existing projects or invoices. Archive them first.' 
+      });
+    }
+
+    // Delete the client record
     await client.deleteOne();
+
+    // Delete the associated user account if it exists and was invited by this freelancer
+    if (client.invitedUser) {
+      await User.findByIdAndDelete(client.invitedUser);
+    }
 
     res.json({ success: true, message: 'Client deleted successfully' });
   } catch (error) {

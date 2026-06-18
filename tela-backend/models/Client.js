@@ -23,6 +23,18 @@ const clientSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  status: {
+    type: String,
+    enum: ['pending', 'active', 'inactive'],
+    default: 'pending'
+  },
+  invitedAt: {
+    type: Date,
+    default: Date.now
+  },
+  joinedAt: {
+    type: Date
+  },
   invitedUser: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'

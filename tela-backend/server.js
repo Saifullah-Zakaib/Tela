@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import connectDB from './config/db.js';
 import errorHandler from './middleware/errorMiddleware.js';
+import { verifyEmailConfig } from './utils/sendEmail.js';
 
 import authRoutes from './routes/authRoutes.js';
 import clientRoutes from './routes/clientRoutes.js';
@@ -19,6 +20,9 @@ dotenv.config();
 connectDB();
 
 const app = express();
+
+// Verify email configuration
+verifyEmailConfig();
 
 // CORS
 app.use(cors({

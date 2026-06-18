@@ -9,7 +9,8 @@ import {
   setPassword,
   getMe,
   updateProfile,
-  updatePassword
+  updatePassword,
+  configureEmail
 } from '../controllers/authController.js';
 import { protect, freelancerOnly } from '../middleware/authMiddleware.js';
 
@@ -25,5 +26,6 @@ router.post('/set-password/:token', setPassword);
 router.get('/me', protect, getMe);
 router.put('/update-profile', protect, updateProfile);
 router.put('/update-password', protect, updatePassword);
+router.put('/configure-email', protect, configureEmail);
 
 export default router;
