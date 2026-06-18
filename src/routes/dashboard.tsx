@@ -2,32 +2,59 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Briefcase, FileText, DollarSign, Plus, MessageSquare, FileCheck, FileWarning, Upload, CheckCircle2,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/portal/DashboardLayout";
 import { StatusBadge, Card } from "@/components/portal/Bits";
-import { activity, milestones, projectById, clientById, fmtMoney } from "@/lib/data";
+import { projectsApi, notificationsApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { fmtMoney } from "@/lib/data";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — Tela" }] }),
   component: Dashboard,
 });
 
-const STATS = [
-  { label: "Total Projects", value: "12", icon: Briefcase, tone: "bg-primary/10 text-primary", sub: "+2 this month" },
-  { label: "Active Projects", value: "5", icon: CheckCircle2, tone: "bg-success/10 text-success", sub: "3 due this week" },
-  { label: "Pending Invoices", value: "$12,400", icon: FileText, tone: "bg-warning/15 text-warning", sub: "4 invoices outstanding" },
-  { label: "Revenue (June)", value: "$24,800", icon: DollarSign, tone: "bg-accent/10 text-accent", sub: "+18% vs May" },
-];
-
 const ICON_MAP: Record<string, any> = {
-  approved: FileCheck, paid: DollarSign, message: MessageSquare, file: Upload, overdue: FileWarning,
+  milestone_approved: FileCheck, 
+  invoice_paid: DollarSign, 
+  new_message: MessageSquare, 
+  file: Upload, 
+  invoice_overdue: FileWarning,
 };
 
 function Dashboard() {
-  const upcoming = milestones.filter((m) => m.status !== "approved").slice(0, 5);
+  const { user } = useAuth();
+  
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectsApi.getAll()
+  });
+
+  const { data: notificationsData } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => notificationsApi.getAll({ limit: 6 })
+  });
+
+  const projects = projectsData?.data || [];
+  const notifications = notificationsData?.data || [];
+  
+  const activeProjects = projects.filter((p: any) => 
+    p.status === 'in_progress' || p.status === 'under_review'
+  );
+  
+  const totalBudget = projects.reduce((sum: number, p: any) => sum + (p.budget || 0), 0);
+
+  const STATS = [
+    { label: "Total Projects", value: projects.length.toString(), icon: Briefcase, tone: "bg-primary/10 text-primary", sub: `${activeProjects.length} active` },
+    { label: "Active Projects", value: activeProjects.length.toString(), icon: CheckCircle2, tone: "bg-success/10 text-success", sub: "In progress" },
+    { label: "Notifications", value: notificationsData?.unreadCount?.toString() || "0", icon: MessageSquare, tone: "bg-warning/15 text-warning", sub: "Unread messages" },
+    { label: "Total Budget", value: fmtMoney(totalBudget), icon: DollarSign, tone: "bg-accent/10 text-accent", sub: "Across all projects" },
+  ];
+
   return (
     <DashboardLayout title="Dashboard">
       <div className="mb-2">
-        <h2 className="text-2xl font-bold tracking-tight">Welcome back, Alex 👋</h2>
+        <h2 className="text-2xl font-bold tracking-tight">Welcome back, {user?.name?.split(' ')[0] || 'there'} 👋</h2>
         <p className="mt-1 text-sm text-muted-foreground">Here's what's happening across your studio today.</p>
       </div>
 
@@ -55,23 +82,29 @@ function Dashboard() {
         <Card className="p-5 lg:col-span-2">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold">Recent Activity</h3>
-            <button className="text-xs font-medium text-primary hover:underline">See all</button>
+            <Link to="/dashboard" className="text-xs font-medium text-primary hover:underline">See all</Link>
           </div>
           <ul className="mt-4 space-y-1">
-            {activity.map((a) => {
-              const Icon = ICON_MAP[a.type] ?? MessageSquare;
-              return (
-                <li key={a.id} className="flex items-start gap-3 rounded-xl p-3 transition hover:bg-muted">
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm">{a.text}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{a.when}</p>
-                  </div>
-                </li>
-              );
-            })}
+            {notifications.length === 0 ? (
+              <li className="px-3 py-6 text-center text-sm text-muted-foreground">No recent activity</li>
+            ) : (
+              notifications.map((n: any) => {
+                const Icon = ICON_MAP[n.type] ?? MessageSquare;
+                return (
+                  <li key={n._id} className="flex items-start gap-3 rounded-xl p-3 transition hover:bg-muted">
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm">{n.message}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {new Date(n.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })
+            )}
           </ul>
         </Card>
 
@@ -88,16 +121,12 @@ function Dashboard() {
               Create Invoice <Plus className="h-4 w-4 text-primary" />
             </Link>
           </div>
-          <div className="mt-4 rounded-xl border border-dashed border-border p-4 text-center">
-            <p className="text-xs text-muted-foreground">Need help getting set up?</p>
-            <button className="mt-2 text-xs font-medium text-primary hover:underline">Book onboarding call →</button>
-          </div>
         </Card>
       </div>
 
       <Card className="mt-6 overflow-hidden">
         <div className="flex items-center justify-between p-5">
-          <h3 className="font-semibold">Upcoming Milestones</h3>
+          <h3 className="font-semibold">Recent Projects</h3>
           <Link to="/projects" className="text-xs font-medium text-primary hover:underline">All projects →</Link>
         </div>
         <div className="overflow-x-auto">
@@ -105,28 +134,32 @@ function Dashboard() {
             <thead className="border-y border-border bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-5 py-2.5 text-left font-medium">Project</th>
-                <th className="px-5 py-2.5 text-left font-medium">Milestone</th>
                 <th className="px-5 py-2.5 text-left font-medium">Client</th>
-                <th className="px-5 py-2.5 text-left font-medium">Amount</th>
-                <th className="px-5 py-2.5 text-left font-medium">Due</th>
+                <th className="px-5 py-2.5 text-left font-medium">Budget</th>
+                <th className="px-5 py-2.5 text-left font-medium">Deadline</th>
                 <th className="px-5 py-2.5 text-left font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
-              {upcoming.map((m) => {
-                const p = projectById(m.projectId);
-                const c = p ? clientById(p.clientId) : undefined;
-                return (
-                  <tr key={m.id} className="border-b border-border last:border-0 transition hover:bg-muted/30">
-                    <td className="px-5 py-3 font-medium">{p?.name}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{m.name}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{c?.name}</td>
-                    <td className="px-5 py-3">{fmtMoney(m.amount)}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{m.due}</td>
-                    <td className="px-5 py-3"><StatusBadge status={m.status} /></td>
+              {projects.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                    No projects yet. Create your first project to get started.
+                  </td>
+                </tr>
+              ) : (
+                projects.slice(0, 5).map((p: any) => (
+                  <tr key={p._id} className="border-b border-border last:border-0 transition hover:bg-muted/30">
+                    <td className="px-5 py-3 font-medium">{p.name}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{p.client?.name}</td>
+                    <td className="px-5 py-3">{fmtMoney(p.budget || 0)}</td>
+                    <td className="px-5 py-3 text-muted-foreground">
+                      {p.deadline ? new Date(p.deadline).toLocaleDateString() : '—'}
+                    </td>
+                    <td className="px-5 py-3"><StatusBadge status={p.status} /></td>
                   </tr>
-                );
-              })}
+                ))
+              )}
             </tbody>
           </table>
         </div>

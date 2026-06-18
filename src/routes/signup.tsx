@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AuthShell, Field, inputCls } from "@/components/portal/AuthShell";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/signup")({
   head: () => ({ meta: [{ title: "Sign up — Tela" }] }),
@@ -12,25 +13,35 @@ export const Route = createFileRoute("/signup")({
 
 function Signup() {
   const nav = useNavigate();
+  const { register } = useAuth();
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [f, setF] = useState({ name: "", email: "", pwd: "", confirm: "", role: "freelancer" });
   const [err, setErr] = useState<Record<string, string>>({});
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     const n: Record<string, string> = {};
     if (f.name.trim().length < 2) n.name = "Tell us your name";
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.email)) n.email = "Enter a valid email";
-    if (f.pwd.length < 8) n.pwd = "Use at least 8 characters";
+    if (f.pwd.length < 6) n.pwd = "Use at least 6 characters";
     if (f.confirm !== f.pwd) n.confirm = "Passwords don't match";
     setErr(n);
     if (Object.keys(n).length) return;
+    
     setLoading(true);
-    setTimeout(() => {
-      toast.success("Account created. Welcome to Tela!");
+    try {
+      await register(f.name, f.email, f.pwd);
+      toast.success("Account created. Welcome to Tela! Check your email to verify.");
       nav({ to: "/dashboard" });
-    }, 700);
+    } catch (error: any) {
+      toast.error(error.message || "Registration failed");
+      if (error.message.toLowerCase().includes("exists")) {
+        setErr({ email: "Email already exists" });
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

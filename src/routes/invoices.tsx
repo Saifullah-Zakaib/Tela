@@ -1,8 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus, Eye, Send, Download } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { DashboardLayout } from "@/components/portal/DashboardLayout";
 import { Card, StatusBadge } from "@/components/portal/Bits";
-import { invoices, clientById, fmtMoney } from "@/lib/data";
+import { invoicesApi } from "@/lib/api";
+import { fmtMoney } from "@/lib/data";
 
 export const Route = createFileRoute("/invoices")({
   head: () => ({ meta: [{ title: "Invoices — Tela" }] }),
@@ -10,9 +13,29 @@ export const Route = createFileRoute("/invoices")({
 });
 
 function Invoices() {
-  const total = invoices.reduce((s, i) => s + i.amount, 0);
-  const paid = invoices.filter((i) => i.status === "paid").reduce((s, i) => s + i.amount, 0);
-  const overdue = invoices.filter((i) => i.status === "overdue").reduce((s, i) => s + i.amount, 0);
+  const queryClient = useQueryClient();
+  
+  const { data, isLoading } = useQuery({
+    queryKey: ['invoices'],
+    queryFn: () => invoicesApi.getAll()
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: (id: string) => invoicesApi.send(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      toast.success('Invoice sent successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to send invoice');
+    }
+  });
+
+  const invoices = data?.data || [];
+  
+  const total = invoices.reduce((s: number, i: any) => s + i.total, 0);
+  const paid = invoices.filter((i: any) => i.status === "paid").reduce((s: number, i: any) => s + i.total, 0);
+  const overdue = invoices.filter((i: any) => i.status === "overdue").reduce((s: number, i: any) => s + i.total, 0);
 
   return (
     <DashboardLayout title="Invoices">
@@ -39,42 +62,62 @@ function Invoices() {
         ))}
       </div>
 
-      <Card className="mt-6 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b border-border bg-muted/40 text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="px-5 py-3 text-left font-medium">Invoice</th>
-                <th className="px-5 py-3 text-left font-medium">Client</th>
-                <th className="px-5 py-3 text-left font-medium">Issued</th>
-                <th className="px-5 py-3 text-left font-medium">Due</th>
-                <th className="px-5 py-3 text-left font-medium">Amount</th>
-                <th className="px-5 py-3 text-left font-medium">Status</th>
-                <th className="px-5 py-3 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.map((i) => (
-                <tr key={i.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                  <td className="px-5 py-3 font-medium">{i.id}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{clientById(i.clientId)?.name}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{i.issued}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{i.due}</td>
-                  <td className="px-5 py-3 font-semibold">{fmtMoney(i.amount)}</td>
-                  <td className="px-5 py-3"><StatusBadge status={i.status} /></td>
-                  <td className="px-5 py-3">
-                    <div className="flex justify-end gap-1.5">
-                      <button title="View" className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted"><Eye className="h-3.5 w-3.5" /></button>
-                      <button title="Send" className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted"><Send className="h-3.5 w-3.5" /></button>
-                      <button title="Download" className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted"><Download className="h-3.5 w-3.5" /></button>
-                    </div>
-                  </td>
+      {isLoading ? (
+        <div className="mt-6 text-center text-muted-foreground">Loading invoices...</div>
+      ) : (
+        <Card className="mt-6 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border bg-muted/40 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-5 py-3 text-left font-medium">Invoice</th>
+                  <th className="px-5 py-3 text-left font-medium">Client</th>
+                  <th className="px-5 py-3 text-left font-medium">Issued</th>
+                  <th className="px-5 py-3 text-left font-medium">Due</th>
+                  <th className="px-5 py-3 text-left font-medium">Amount</th>
+                  <th className="px-5 py-3 text-left font-medium">Status</th>
+                  <th className="px-5 py-3 text-right font-medium">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+              </thead>
+              <tbody>
+                {invoices.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                      No invoices yet. Create your first invoice to get started.
+                    </td>
+                  </tr>
+                ) : (
+                  invoices.map((i: any) => (
+                    <tr key={i._id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="px-5 py-3 font-medium">{i.invoiceNumber}</td>
+                      <td className="px-5 py-3 text-muted-foreground">{i.client?.name}</td>
+                      <td className="px-5 py-3 text-muted-foreground">{new Date(i.createdAt).toLocaleDateString()}</td>
+                      <td className="px-5 py-3 text-muted-foreground">{i.dueDate ? new Date(i.dueDate).toLocaleDateString() : '—'}</td>
+                      <td className="px-5 py-3 font-semibold">{fmtMoney(i.total)}</td>
+                      <td className="px-5 py-3"><StatusBadge status={i.status} /></td>
+                      <td className="px-5 py-3">
+                        <div className="flex justify-end gap-1.5">
+                          <button title="View" className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted"><Eye className="h-3.5 w-3.5" /></button>
+                          {i.status === 'draft' && (
+                            <button 
+                              onClick={() => sendMutation.mutate(i._id)}
+                              title="Send" 
+                              className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted"
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          <button title="Download" className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted"><Download className="h-3.5 w-3.5" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </DashboardLayout>
   );
 }

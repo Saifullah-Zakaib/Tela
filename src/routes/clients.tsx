@@ -2,10 +2,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Mail, Phone, Plus, Search, Users, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/portal/DashboardLayout";
 import { Avatar, Card, EmptyState } from "@/components/portal/Bits";
 import { Field, inputCls } from "@/components/portal/AuthShell";
-import { clients } from "@/lib/data";
+import { clientsApi, authApi } from "@/lib/api";
 
 export const Route = createFileRoute("/clients")({
   head: () => ({ meta: [{ title: "Clients — Tela" }] }),
@@ -15,10 +16,36 @@ export const Route = createFileRoute("/clients")({
 function Clients() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+  
+  const { data, isLoading } = useQuery({
+    queryKey: ['clients'],
+    queryFn: () => clientsApi.getAll()
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => clientsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      toast.success('Client deleted successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to delete client');
+    }
+  });
+
+  const handleDelete = (id: string, name: string) => {
+    if (window.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
+      deleteMutation.mutate(id);
+    }
+  };
+
+  const clients = data?.data || [];
+  
   const filtered = clients.filter(
-    (c) =>
+    (c: any) =>
       c.name.toLowerCase().includes(q.toLowerCase()) ||
-      c.company.toLowerCase().includes(q.toLowerCase()) ||
+      (c.company || '').toLowerCase().includes(q.toLowerCase()) ||
       c.email.toLowerCase().includes(q.toLowerCase()),
   );
 
@@ -45,7 +72,9 @@ function Clients() {
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="mt-8 text-center text-muted-foreground">Loading clients...</div>
+      ) : filtered.length === 0 ? (
         <div className="mt-8">
           <EmptyState
             icon={<Users className="h-6 w-6" />}
@@ -60,26 +89,41 @@ function Clients() {
         </div>
       ) : (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((c) => (
-            <Card key={c.id} className="p-5">
+          {filtered.map((c: any) => (
+            <Card key={c._id} className="p-5">
               <div className="flex items-center gap-3">
                 <Avatar name={c.name} className="h-12 w-12" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{c.name}</p>
-                  <p className="truncate text-sm text-muted-foreground">{c.company}</p>
+                  <p className="truncate text-sm text-muted-foreground">{c.company || 'No company'}</p>
                 </div>
+                {c.status === 'pending' && (
+                  <div className="flex-shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                    Pending
+                  </div>
+                )}
+                {c.status === 'active' && (
+                  <div className="flex-shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                    Active
+                  </div>
+                )}
               </div>
               <div className="mt-4 space-y-1.5 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2"><Mail className="h-3.5 w-3.5" /><span className="truncate">{c.email}</span></div>
-                <div className="flex items-center gap-2"><Phone className="h-3.5 w-3.5" /><span>{c.phone}</span></div>
+                {c.phone && <div className="flex items-center gap-2"><Phone className="h-3.5 w-3.5" /><span>{c.phone}</span></div>}
               </div>
               <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
                 <span className="text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground">{c.activeProjects}</span> active projects
+                  {c.status === 'pending' ? `Invited ${new Date(c.invitedAt || c.createdAt).toLocaleDateString()}` : `Joined ${new Date(c.joinedAt || c.createdAt).toLocaleDateString()}`}
                 </span>
                 <div className="flex gap-2">
-                  <Link to="/clients/$id" params={{ id: c.id }} className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-muted">View</Link>
-                  <button className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/15">Edit</button>
+                  <Link to="/clients/$id" params={{ id: c._id }} className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-muted">View</Link>
+                  <button
+                    onClick={() => handleDelete(c._id, c.name)}
+                    className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-100"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             </Card>
@@ -93,11 +137,27 @@ function Clients() {
 }
 
 function AddClient({ onClose }: { onClose: () => void }) {
+  const queryClient = useQueryClient();
   const [f, setF] = useState({ name: "", email: "", company: "", phone: "" });
+  
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      // Invite client - this creates both User and Client records
+      return await authApi.inviteClient(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      toast.success(`Invitation sent to ${f.email}`);
+      onClose();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to invite client');
+    }
+  });
+
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    toast.success(`Invite sent to ${f.email}`);
-    onClose();
+    createMutation.mutate(f);
   }
   return (
     <div className="fixed inset-0 z-50">

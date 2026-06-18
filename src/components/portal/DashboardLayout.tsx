@@ -17,6 +17,7 @@ import {
 import { useState, type ReactNode } from "react";
 import { Avatar } from "./Bits";
 import { useTheme } from "@/lib/theme";
+import { useAuth } from "@/lib/auth-context";
 import { notifications as notifData } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
@@ -31,10 +32,14 @@ const NAV = [
 
 export function DashboardLayout({ children, title }: { children: ReactNode; title?: string }) {
   const { theme, toggle } = useTheme();
+  const { user, logout } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [notifOpen, setNotifOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const unread = notifData.filter((n) => n.unread).length;
+
+  // Get user's first name for display
+  const firstName = user?.name?.split(' ')[0] || 'User';
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -115,8 +120,8 @@ export function DashboardLayout({ children, title }: { children: ReactNode; titl
             onClick={() => setMenuOpen((v) => !v)}
             className="flex items-center gap-2 rounded-xl border border-border bg-card px-2 py-1.5 transition hover:bg-muted"
           >
-            <Avatar name="Alex Carter" className="h-7 w-7" />
-            <span className="hidden text-sm font-medium md:inline">Alex</span>
+            <Avatar name={user?.name || 'User'} className="h-7 w-7" />
+            <span className="hidden text-sm font-medium md:inline">{firstName}</span>
             <ChevronDown className="hidden h-3 w-3 md:inline" />
           </button>
         </header>
@@ -128,13 +133,21 @@ export function DashboardLayout({ children, title }: { children: ReactNode; titl
           >
             <div className="absolute right-4 top-16 w-56 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
               <div className="border-b border-border p-3">
-                <p className="text-sm font-semibold">Alex Carter</p>
-                <p className="text-xs text-muted-foreground">alex@tela.studio</p>
+                <p className="text-sm font-semibold">{user?.name || 'User'}</p>
+                <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
               </div>
               <div className="p-1">
                 <Link to="/settings" className="block rounded-lg px-3 py-2 text-sm hover:bg-muted">Settings</Link>
                 <Link to="/portal" className="block rounded-lg px-3 py-2 text-sm hover:bg-muted">View client portal</Link>
-                <Link to="/login" className="block rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive/10">Sign out</Link>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    logout();
+                  }}
+                  className="block w-full rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
+                >
+                  Sign out
+                </button>
               </div>
             </div>
           </div>

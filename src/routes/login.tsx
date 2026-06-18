@@ -3,6 +3,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AuthShell, Field, inputCls } from "@/components/portal/AuthShell";
+import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Login — Tela" }] }),
@@ -11,24 +12,44 @@ export const Route = createFileRoute("/login")({
 
 function Login() {
   const nav = useNavigate();
+  const { login, user } = useAuth();
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [pwd, setPwd] = useState("");
   const [err, setErr] = useState<{ email?: string; pwd?: string }>({});
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     const next: typeof err = {};
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) next.email = "Enter a valid email";
     if (pwd.length < 6) next.pwd = "Password must be at least 6 characters";
     setErr(next);
     if (Object.keys(next).length) return;
+    
     setLoading(true);
-    setTimeout(() => {
-      toast.success("Welcome back!");
-      nav({ to: "/dashboard" });
-    }, 700);
+    try {
+      await login(email, pwd);
+      
+      // After login, user will be set in context
+      // We need to wait a moment for it to update
+      setTimeout(() => {
+        const userData = JSON.parse(localStorage.getItem('user') || '{"role":"freelancer"}');
+        toast.success("Welcome back!");
+        
+        // Redirect based on role
+        if (userData.role === 'client') {
+          nav({ to: "/portal" });
+        } else {
+          nav({ to: "/dashboard" });
+        }
+      }, 100);
+    } catch (error: any) {
+      toast.error(error.message || "Invalid credentials");
+      setErr({ pwd: "Invalid email or password" });
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

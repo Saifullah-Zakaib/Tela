@@ -20,6 +20,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ClientsRouteImport } from './routes/clients'
 import { Route as ClientSetupRouteImport } from './routes/client-setup'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SetPasswordTokenRouteImport } from './routes/set-password.$token'
 import { Route as ProposalsNewRouteImport } from './routes/proposals.new'
 import { Route as ProjectsIdRouteImport } from './routes/projects.$id'
 import { Route as InvoicesNewRouteImport } from './routes/invoices.new'
@@ -81,6 +82,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SetPasswordTokenRoute = SetPasswordTokenRouteImport.update({
+  id: '/set-password/$token',
+  path: '/set-password/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProposalsNewRoute = ProposalsNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/invoices/new': typeof InvoicesNewRoute
   '/projects/$id': typeof ProjectsIdRoute
   '/proposals/new': typeof ProposalsNewRoute
+  '/set-password/$token': typeof SetPasswordTokenRoute
   '/portal/projects/$id': typeof PortalProjectsIdRoute
 }
 export interface FileRoutesByTo {
@@ -141,6 +148,7 @@ export interface FileRoutesByTo {
   '/invoices/new': typeof InvoicesNewRoute
   '/projects/$id': typeof ProjectsIdRoute
   '/proposals/new': typeof ProposalsNewRoute
+  '/set-password/$token': typeof SetPasswordTokenRoute
   '/portal/projects/$id': typeof PortalProjectsIdRoute
 }
 export interface FileRoutesById {
@@ -160,6 +168,7 @@ export interface FileRoutesById {
   '/invoices/new': typeof InvoicesNewRoute
   '/projects/$id': typeof ProjectsIdRoute
   '/proposals/new': typeof ProposalsNewRoute
+  '/set-password/$token': typeof SetPasswordTokenRoute
   '/portal/projects/$id': typeof PortalProjectsIdRoute
 }
 export interface FileRouteTypes {
@@ -180,6 +189,7 @@ export interface FileRouteTypes {
     | '/invoices/new'
     | '/projects/$id'
     | '/proposals/new'
+    | '/set-password/$token'
     | '/portal/projects/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -198,6 +208,7 @@ export interface FileRouteTypes {
     | '/invoices/new'
     | '/projects/$id'
     | '/proposals/new'
+    | '/set-password/$token'
     | '/portal/projects/$id'
   id:
     | '__root__'
@@ -216,6 +227,7 @@ export interface FileRouteTypes {
     | '/invoices/new'
     | '/projects/$id'
     | '/proposals/new'
+    | '/set-password/$token'
     | '/portal/projects/$id'
   fileRoutesById: FileRoutesById
 }
@@ -231,6 +243,7 @@ export interface RootRouteChildren {
   ProposalsRoute: typeof ProposalsRouteWithChildren
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
+  SetPasswordTokenRoute: typeof SetPasswordTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -310,6 +323,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/set-password/$token': {
+      id: '/set-password/$token'
+      path: '/set-password/$token'
+      fullPath: '/set-password/$token'
+      preLoaderRoute: typeof SetPasswordTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/proposals/new': {
@@ -420,6 +440,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProposalsRoute: ProposalsRouteWithChildren,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
+  SetPasswordTokenRoute: SetPasswordTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
