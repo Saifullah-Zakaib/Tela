@@ -12,7 +12,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['milestone_approved', 'invoice_paid', 'new_message', 'proposal_accepted', 'invoice_overdue'],
+    enum: ['milestone_approved', 'milestone_review', 'milestone_revision', 'invoice_paid', 'new_message', 'proposal_accepted', 'invoice_overdue'],
     required: true
   },
   link: {

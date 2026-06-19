@@ -23,7 +23,7 @@ const milestoneSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'in-progress', 'completed', 'approved'],
+    enum: ['pending', 'in_progress', 'under_review', 'approved', 'completed'],
     default: 'pending'
   },
   order: {

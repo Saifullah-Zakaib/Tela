@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid';
+import { getClientUrl } from '../config/clientUrl.js';
 import Proposal from '../models/Proposal.js';
 import Client from '../models/Client.js';
 import Notification from '../models/Notification.js';
@@ -66,7 +67,7 @@ export const createProposal = async (req, res) => {
 
     const populatedProposal = await Proposal.findById(proposal._id).populate('client', 'name email company');
 
-    const shareableLink = `${process.env.CLIENT_URL}/proposals/public/${publicSlug}`;
+    const shareableLink = `${getClientUrl()}/proposals/public/${publicSlug}`;
 
     res.status(201).json({
       success: true,

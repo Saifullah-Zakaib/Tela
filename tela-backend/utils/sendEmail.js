@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import sgMail from '@sendgrid/mail';
+import { getClientUrl } from '../config/clientUrl.js';
 
 /**
  * Production-ready email service with SendGrid support
@@ -363,7 +364,7 @@ export const emailTemplates = {
   <h2>Verify Your Email</h2>
   <p>Hi ${name},</p>
   <p>Please verify your email by clicking the button below:</p>
-  <p><a href="${process.env.CLIENT_URL}/verify-email/${token}" style="background: #3B82F6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Verify Email</a></p>
+  <p><a href="${getClientUrl()}/verify-email/${token}" style="background: #3B82F6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Verify Email</a></p>
 </body>
 </html>
     `;
@@ -378,7 +379,7 @@ export const emailTemplates = {
   <h2>Reset Your Password</h2>
   <p>Hi ${name},</p>
   <p>Click the button below to reset your password:</p>
-  <p><a href="${process.env.CLIENT_URL}/reset-password/${token}" style="background: #EF4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a></p>
+  <p><a href="${getClientUrl()}/reset-password/${token}" style="background: #EF4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a></p>
   <p style="color: #9CA3AF; font-size: 12px;">This link expires in 10 minutes.</p>
 </body>
 </html>
@@ -394,7 +395,7 @@ export const emailTemplates = {
   <h2>New Invoice: ${invoiceNumber}</h2>
   <p>Hi ${clientName},</p>
   <p>You have received a new invoice for $${total.toFixed(2)}.</p>
-  <p><a href="${process.env.CLIENT_URL}/portal" style="background: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">View Invoice</a></p>
+  <p><a href="${getClientUrl()}/portal" style="background: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">View Invoice</a></p>
 </body>
 </html>
     `;
@@ -414,6 +415,22 @@ export const emailTemplates = {
     `;
   },
 
+  // Milestone ready for client review
+  milestoneReview: (clientName, milestoneName, projectName, projectId) => {
+    const reviewUrl = `${getClientUrl()}/portal/projects/${projectId}`;
+    return `
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; padding: 20px;">
+  <h2>Milestone ready for review</h2>
+  <p>Hi ${clientName},</p>
+  <p>"${milestoneName}" on project "${projectName}" is ready for your review.</p>
+  <p><a href="${reviewUrl}" style="background: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Review &amp; Approve</a></p>
+</body>
+</html>
+    `;
+  },
+
   // Milestone approved
   milestoneApproved: (freelancerName, milestoneName, projectName) => {
     return `
@@ -423,6 +440,23 @@ export const emailTemplates = {
   <h2>Milestone Approved!</h2>
   <p>Hi ${freelancerName},</p>
   <p>The milestone "${milestoneName}" in project "${projectName}" has been approved.</p>
+</body>
+</html>
+    `;
+  },
+
+  // Client requested milestone revisions
+  milestoneRevision: (freelancerName, milestoneName, projectName, feedback, projectId) => {
+    const projectUrl = `${getClientUrl()}/projects/${projectId}`;
+    return `
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; padding: 20px;">
+  <h2>Revision Requested</h2>
+  <p>Hi ${freelancerName},</p>
+  <p>Your client has requested changes on "${milestoneName}" in project "${projectName}".</p>
+  <p style="background: #f3f4f6; padding: 12px; border-radius: 6px;">${feedback.replace(/\n/g, '<br>')}</p>
+  <p><a href="${projectUrl}" style="background: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">View Project</a></p>
 </body>
 </html>
     `;

@@ -1,6 +1,7 @@
 import Invoice from '../models/Invoice.js';
 import Client from '../models/Client.js';
 import Project from '../models/Project.js';
+import Milestone from '../models/Milestone.js';
 import Notification from '../models/Notification.js';
 import generateInvoiceNumber from '../utils/generateInvoiceNumber.js';
 import sendEmail, { emailTemplates } from '../utils/sendEmail.js';
@@ -13,7 +14,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // @access  Private
 export const getInvoices = async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 10, project } = req.query;
     let query = {};
 
     if (req.user.role === 'freelancer') {
@@ -26,9 +27,15 @@ export const getInvoices = async (req, res) => {
       query.client = client._id;
     }
 
+    if (project) {
+      query.project = project;
+    }
+
     const invoices = await Invoice.find(query)
       .populate('client', 'name email company')
-      .populate('project', 'name')
+      .populate('project', 'name budget')
+      .populate('milestone', 'name amount')
+      .populate('milestones', 'name amount')
       .populate('freelancer', 'name businessName')
       .limit(limit * 1)
       .skip((page - 1) * limit)
@@ -52,7 +59,7 @@ export const getInvoices = async (req, res) => {
 // @access  Private/Freelancer
 export const createInvoice = async (req, res) => {
   try {
-    const { clientId, projectId, lineItems, taxPercent, discount, notes, dueDate } = req.body;
+    const { clientId, projectId, milestoneId, milestoneIds, lineItems, taxPercent, discount, notes, dueDate } = req.body;
 
     if (!clientId || !lineItems || lineItems.length === 0) {
       return res.status(400).json({ success: false, message: 'Please provide client and line items' });
@@ -65,6 +72,31 @@ export const createInvoice = async (req, res) => {
 
     if (!client) {
       return res.status(404).json({ success: false, message: 'Client not found' });
+    }
+
+    const linkedMilestoneIds = [
+      ...(Array.isArray(milestoneIds) ? milestoneIds : []),
+      ...(milestoneId ? [milestoneId] : []),
+    ].filter((id, index, arr) => arr.indexOf(id) === index);
+
+    for (const mid of linkedMilestoneIds) {
+      const existing = await Invoice.findOne({
+        $or: [{ milestone: mid }, { milestones: mid }]
+      });
+      if (existing) {
+        const ms = await Milestone.findById(mid).select('name');
+        return res.status(400).json({
+          success: false,
+          message: `Milestone "${ms?.name || 'Unknown'}" already has an invoice (${existing.invoiceNumber})`
+        });
+      }
+    }
+
+    if (projectId) {
+      const project = await Project.findOne({ _id: projectId, freelancer: req.user._id });
+      if (!project) {
+        return res.status(404).json({ success: false, message: 'Project not found' });
+      }
     }
 
     const invoiceNumber = await generateInvoiceNumber();
@@ -83,6 +115,8 @@ export const createInvoice = async (req, res) => {
       freelancer: req.user._id,
       client: clientId,
       project: projectId || null,
+      milestone: linkedMilestoneIds.length === 1 ? linkedMilestoneIds[0] : null,
+      milestones: linkedMilestoneIds,
       invoiceNumber,
       lineItems: calculatedLineItems,
       subtotal,

@@ -15,6 +15,14 @@ const invoiceSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Project'
   },
+  milestone: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Milestone'
+  },
+  milestones: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Milestone'
+  }],
   invoiceNumber: {
     type: String,
     required: true,

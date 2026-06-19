@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { getClientUrl } from '../config/clientUrl.js';
 import User from '../models/User.js';
 import Client from '../models/Client.js';
 import generateToken from '../utils/generateToken.js';
@@ -225,7 +226,7 @@ export const inviteClient = async (req, res) => {
 
     // Send email from verified SendGrid email, but replies go to freelancer
     const freelancer = req.user;
-    const inviteUrl = `${process.env.CLIENT_URL}/set-password/${inviteToken}`;
+    const inviteUrl = `${getClientUrl()}/set-password/${inviteToken}`;
     
     try {
       await sendEmail({

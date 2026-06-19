@@ -4,6 +4,18 @@ import Milestone from '../models/Milestone.js';
 import FeedMessage from '../models/FeedMessage.js';
 import File from '../models/File.js';
 import Invoice from '../models/Invoice.js';
+import { isPastDate } from '../utils/dateValidation.js';
+
+function normalizeStatusValue(status) {
+  if (!status) return 'planning';
+  return String(status).toLowerCase().replace(/-/g, '_');
+}
+
+function withNormalizedStatus(project) {
+  const obj = project.toObject ? project.toObject() : { ...project };
+  obj.status = normalizeStatusValue(obj.status);
+  return obj;
+}
 
 // @desc    Get all projects
 // @route   GET /api/projects
@@ -41,7 +53,7 @@ export const getProjects = async (req, res) => {
 
     res.json({
       success: true,
-      data: projects,
+      data: projects.map(withNormalizedStatus),
       totalPages: Math.ceil(count / limit),
       currentPage: page
     });
@@ -55,7 +67,7 @@ export const getProjects = async (req, res) => {
 // @access  Private/Freelancer
 export const createProject = async (req, res) => {
   try {
-    const { clientId, name, description, status, startDate, deadline, budget } = req.body;
+    const { clientId, name, description, startDate, deadline, budget } = req.body;
 
     if (!clientId || !name) {
       return res.status(400).json({ success: false, message: 'Please provide client and project name' });
@@ -70,6 +82,10 @@ export const createProject = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Client not found' });
     }
 
+    if (deadline && isPastDate(deadline)) {
+      return res.status(400).json({ success: false, message: 'Project deadline cannot be in the past' });
+    }
+
     let contractFile = '';
     if (req.file) {
       contractFile = req.file.path;
@@ -80,7 +96,6 @@ export const createProject = async (req, res) => {
       client: clientId,
       name,
       description,
-      status,
       startDate,
       deadline,
       budget,
@@ -128,7 +143,7 @@ export const getProject = async (req, res) => {
     res.json({
       success: true,
       data: {
-        ...project.toObject(),
+        ...withNormalizedStatus(project),
         milestones,
         invoices
       }
@@ -143,7 +158,7 @@ export const getProject = async (req, res) => {
 // @access  Private/Freelancer
 export const updateProject = async (req, res) => {
   try {
-    const { name, description, status, deadline, budget } = req.body;
+    const { name, description, deadline, budget } = req.body;
 
     const project = await Project.findOne({
       _id: req.params.id,
@@ -154,9 +169,12 @@ export const updateProject = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
+    if (deadline && isPastDate(deadline)) {
+      return res.status(400).json({ success: false, message: 'Project deadline cannot be in the past' });
+    }
+
     if (name) project.name = name;
     if (description) project.description = description;
-    if (status) project.status = status;
     if (deadline) project.deadline = deadline;
     if (budget) project.budget = budget;
 

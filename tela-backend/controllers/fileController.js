@@ -1,7 +1,7 @@
 import File from '../models/File.js';
 import Project from '../models/Project.js';
 import Client from '../models/Client.js';
-import { cloudinary } from '../utils/uploadMiddleware.js';
+import { cloudinary, getPublicFileUrl, isCloudinaryConfigured } from '../utils/uploadMiddleware.js';
 
 // @desc    Get all files for a project
 // @route   GET /api/projects/:projectId/files
@@ -28,6 +28,7 @@ export const getFiles = async (req, res) => {
 
     const files = await File.find({ project: req.params.projectId })
       .populate('uploadedBy', 'name avatar')
+      .populate('milestone', 'name')
       .sort({ createdAt: -1 });
 
     res.json({ success: true, data: files });
@@ -69,16 +70,21 @@ export const uploadFile = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
+    const { milestoneId } = req.body;
+
     const file = await File.create({
       project: req.params.projectId,
+      milestone: milestoneId || null,
       uploadedBy: req.user._id,
       fileName: req.file.originalname,
-      fileUrl: req.file.path,
+      fileUrl: getPublicFileUrl(req.file),
       fileType: req.file.mimetype,
       fileSize: req.file.size
     });
 
-    const populatedFile = await File.findById(file._id).populate('uploadedBy', 'name avatar');
+    const populatedFile = await File.findById(file._id)
+      .populate('uploadedBy', 'name avatar')
+      .populate('milestone', 'name');
 
     res.status(201).json({ success: true, data: populatedFile });
   } catch (error) {
@@ -108,12 +114,14 @@ export const deleteFile = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
-    // Delete from Cloudinary
-    const publicId = file.fileUrl.split('/').pop().split('.')[0];
-    try {
-      await cloudinary.uploader.destroy(`tela/${publicId}`);
-    } catch (err) {
-      console.log('Cloudinary delete error:', err);
+    // Delete from Cloudinary when applicable
+    if (isCloudinaryConfigured() && file.fileUrl?.includes('cloudinary')) {
+      const publicId = file.fileUrl.split('/').pop().split('.')[0];
+      try {
+        await cloudinary.uploader.destroy(`tela/${publicId}`);
+      } catch (err) {
+        console.log('Cloudinary delete error:', err);
+      }
     }
 
     await file.deleteOne();

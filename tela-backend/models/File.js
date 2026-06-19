@@ -6,6 +6,11 @@ const fileSchema = new mongoose.Schema({
     ref: 'Project',
     required: true
   },
+  milestone: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Milestone',
+    default: null
+  },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

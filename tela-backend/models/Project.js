@@ -21,8 +21,12 @@ const projectSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['planning', 'in-progress', 'under-review', 'completed'],
-    default: 'planning'
+    enum: ['planning', 'in_progress', 'under_review', 'completed'],
+    default: 'planning',
+    set: (value) => {
+      if (!value) return 'planning';
+      return String(value).toLowerCase().replace(/-/g, '_');
+    },
   },
   startDate: {
     type: Date,
