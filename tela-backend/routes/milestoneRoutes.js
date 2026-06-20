@@ -5,16 +5,16 @@ import {
   updateMilestone,
   deleteMilestone
 } from '../controllers/milestoneController.js';
-import { protect, freelancerOnly } from '../middleware/authMiddleware.js';
+import { protect, freelancerOnly, requireSubscription } from '../middleware/authMiddleware.js';
 
 const router = express.Router({ mergeParams: true });
 
 router.route('/')
-  .get(protect, getMilestones)
-  .post(protect, freelancerOnly, createMilestone);
+  .get(protect, requireSubscription, getMilestones)
+  .post(protect, freelancerOnly, requireSubscription, createMilestone);
 
 router.route('/:id')
-  .put(protect, updateMilestone)
-  .delete(protect, freelancerOnly, deleteMilestone);
+  .put(protect, requireSubscription, updateMilestone)
+  .delete(protect, freelancerOnly, requireSubscription, deleteMilestone);
 
 export default router;

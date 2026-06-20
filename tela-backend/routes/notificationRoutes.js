@@ -4,12 +4,12 @@ import {
   markAllRead,
   markRead
 } from '../controllers/notificationController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect, requireSubscription } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.get('/', protect, getNotifications);
-router.put('/mark-all-read', protect, markAllRead);
-router.put('/:id/read', protect, markRead);
+router.get('/', protect, requireSubscription, getNotifications);
+router.put('/mark-all-read', protect, requireSubscription, markAllRead);
+router.put('/:id/read', protect, requireSubscription, markRead);
 
 export default router;

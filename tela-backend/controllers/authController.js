@@ -4,6 +4,21 @@ import User from '../models/User.js';
 import Client from '../models/Client.js';
 import generateToken from '../utils/generateToken.js';
 import sendEmail, { emailTemplates } from '../utils/sendEmail.js';
+import { serializeSubscription } from '../utils/subscriptionAccess.js';
+
+function formatAuthUser(user) {
+  return {
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    avatar: user.avatar,
+    businessName: user.businessName,
+    brandColor: user.brandColor,
+    isEmailVerified: user.isEmailVerified,
+    ...serializeSubscription(user),
+  };
+}
 
 // @desc    Register freelancer
 // @route   POST /api/auth/register
@@ -45,13 +60,7 @@ export const register = async (req, res) => {
       success: true,
       data: {
         token,
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          isEmailVerified: user.isEmailVerified
-        }
+        user: formatAuthUser(user),
       }
     });
   } catch (error) {
@@ -87,15 +96,7 @@ export const login = async (req, res) => {
       success: true,
       data: {
         token,
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          avatar: user.avatar,
-          businessName: user.businessName,
-          brandColor: user.brandColor
-        }
+        user: formatAuthUser(user),
       }
     });
   } catch (error) {

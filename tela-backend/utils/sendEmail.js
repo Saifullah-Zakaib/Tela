@@ -474,6 +474,141 @@ export const emailTemplates = {
 </body>
 </html>
     `;
+  },
+
+  // Proposal sent to client
+  proposalSent: (clientName, title, description, price, timeline, proposalUrl, freelancerName) => {
+    const priceFormatted = typeof price === 'number' ? `$${price.toLocaleString()}` : price;
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f0fdf4;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f0fdf4; padding: 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); padding: 48px 40px; text-align: left;">
+              <div style="display: inline-block; background-color: rgba(255,255,255,0.2); padding: 12px; border-radius: 12px; margin-bottom: 20px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M2 17L12 22L22 17" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M2 12L12 17L22 12" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <p style="color: rgba(255,255,255,0.9); margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">New Proposal</p>
+              <h1 style="color: #ffffff; margin: 0; font-size: 32px; font-weight: 700; line-height: 1.2;">${title}</h1>
+              <p style="color: rgba(255,255,255,0.85); margin: 12px 0 0; font-size: 16px;">Prepared for ${clientName}${description ? ' • ' + freelancerName : ''}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <p style="color: #374151; margin: 0 0 24px; font-size: 16px; line-height: 1.6;">Hi ${clientName},</p>
+              <p style="color: #374151; margin: 0 0 32px; font-size: 16px; line-height: 1.6;">${freelancerName} has prepared a proposal for you:</p>
+              
+              ${description ? `<div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-left: 4px solid #10B981; padding: 24px; margin: 0 0 32px; border-radius: 8px;">
+                <p style="color: #1F2937; margin: 0; font-size: 15px; line-height: 1.7; white-space: pre-wrap;">${description}</p>
+              </div>` : ''}
+              
+              ${price || timeline ? `<table cellpadding="0" cellspacing="0" style="width: 100%; margin: 0 0 32px; background-color: #F9FAFB; border-radius: 12px; overflow: hidden;">
+                <tr>
+                  <td style="padding: 28px;">
+                    <table cellpadding="0" cellspacing="0" style="width: 100%;">
+                      ${timeline ? `<tr>
+                        <td style="color: #6B7280; padding: 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Timeline</td>
+                        <td style="color: #111827; padding: 12px 0; font-weight: 600; text-align: right; font-size: 16px;">${timeline}</td>
+                      </tr>` : ''}
+                      ${price ? `<tr>
+                        <td style="color: #6B7280; padding: 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-top: 1px solid #E5E7EB;">Investment</td>
+                        <td style="color: #10B981; padding: 12px 0; font-weight: 700; text-align: right; font-size: 28px; border-top: 1px solid #E5E7EB;">${priceFormatted}</td>
+                      </tr>` : ''}
+                    </table>
+                  </td>
+                </tr>
+              </table>` : ''}
+              
+              <table cellpadding="0" cellspacing="0" style="margin: 0 0 32px;">
+                <tr>
+                  <td style="border-radius: 10px; background: linear-gradient(135deg, #10B981 0%, #059669 100%); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
+                    <a href="${proposalUrl}" style="display: inline-block; padding: 16px 40px; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px;">View Full Proposal</a>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="color: #6B7280; margin: 0; font-size: 14px; line-height: 1.6;">
+                Questions? Reply to this email to discuss the proposal with ${freelancerName}.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #F9FAFB; padding: 32px 40px; border-top: 1px solid #E5E7EB;">
+              <p style="color: #9CA3AF; margin: 0 0 8px; font-size: 13px; text-align: center;">Sent by ${freelancerName} via Tela</p>
+              <p style="color: #D1D5DB; margin: 0; font-size: 12px; text-align: center;">
+                <a href="${proposalUrl}" style="color: #10B981; text-decoration: none;">View Proposal Online</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
+  },
+
+  // Proposal deleted/withdrawn
+  proposalDeleted: (clientName, proposalTitle, freelancerName) => {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #fef2f2;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #fef2f2; padding: 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%); padding: 48px 40px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">Proposal Withdrawn</h1>
+              <p style="color: rgba(255,255,255,0.9); margin: 12px 0 0; font-size: 16px;">From ${freelancerName}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <p style="color: #374151; margin: 0 0 24px; font-size: 16px; line-height: 1.6;">Hi ${clientName},</p>
+              <p style="color: #374151; margin: 0 0 24px; font-size: 16px; line-height: 1.6;">
+                ${freelancerName} has withdrawn the proposal: <strong>"${proposalTitle}"</strong>
+              </p>
+              <div style="background-color: #FEF2F2; border-left: 4px solid #EF4444; padding: 20px; margin: 0 0 32px; border-radius: 8px;">
+                <p style="color: #1F2937; margin: 0; font-size: 15px; line-height: 1.7;">
+                  This proposal is no longer available. The link you may have received will no longer work.
+                </p>
+              </div>
+              <p style="color: #6B7280; margin: 0; font-size: 14px; line-height: 1.6;">
+                If you have any questions, please reply to this email to contact ${freelancerName} directly.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #F9FAFB; padding: 32px 40px; border-top: 1px solid #E5E7EB;">
+              <p style="color: #9CA3AF; margin: 0; font-size: 13px; text-align: center;">Sent by ${freelancerName} via Tela</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
   }
 };
 

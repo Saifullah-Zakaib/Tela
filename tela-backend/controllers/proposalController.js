@@ -69,6 +69,26 @@ export const createProposal = async (req, res) => {
 
     const shareableLink = `${getClientUrl()}/proposals/public/${publicSlug}`;
 
+    // Send email to client with proposal
+    try {
+      const freelancerName = req.user.name || 'Your freelancer';
+      const clientName = client.name || 'there';
+      
+      await sendEmail({
+        email: client.email,
+        fromName: freelancerName,
+        fromEmail: process.env.SENDGRID_FROM_EMAIL,
+        replyTo: req.user.email,
+        subject: `New Proposal: ${title}`,
+        html: emailTemplates.proposalSent(clientName, title, description, price, timeline, shareableLink, freelancerName)
+      });
+      
+      console.log(`✓ Proposal email sent to ${client.email}`);
+    } catch (emailError) {
+      console.error('Failed to send proposal email:', emailError.message);
+      // Don't fail the proposal creation if email fails
+    }
+
     res.status(201).json({
       success: true,
       data: {
@@ -184,6 +204,52 @@ export const rejectProposal = async (req, res) => {
     await proposal.save();
 
     res.json({ success: true, data: proposal });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Delete proposal
+// @route   DELETE /api/proposals/:id
+// @access  Private (freelancer)
+export const deleteProposal = async (req, res) => {
+  try {
+    const proposal = await Proposal.findOne({
+      _id: req.params.id,
+      freelancer: req.user._id
+    }).populate('client', 'name email');
+
+    if (!proposal) {
+      return res.status(404).json({ success: false, message: 'Proposal not found' });
+    }
+
+    const client = proposal.client;
+    const freelancerName = req.user.name || 'Your freelancer';
+
+    // Delete the proposal
+    await Proposal.findByIdAndDelete(req.params.id);
+
+    // Send notification email to client
+    try {
+      await sendEmail({
+        email: client.email,
+        fromName: freelancerName,
+        fromEmail: process.env.SENDGRID_FROM_EMAIL,
+        replyTo: req.user.email,
+        subject: `Proposal Withdrawn: ${proposal.title}`,
+        html: emailTemplates.proposalDeleted(client.name, proposal.title, freelancerName)
+      });
+      
+      console.log(`✓ Proposal deletion email sent to ${client.email}`);
+    } catch (emailError) {
+      console.error('Failed to send proposal deletion email:', emailError.message);
+      // Don't fail the deletion if email fails
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Proposal deleted and client notified' 
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

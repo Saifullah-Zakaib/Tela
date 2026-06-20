@@ -4,19 +4,22 @@ import {
   createProposal,
   getPublicProposal,
   acceptProposal,
-  rejectProposal
+  rejectProposal,
+  deleteProposal
 } from '../controllers/proposalController.js';
-import { protect, freelancerOnly } from '../middleware/authMiddleware.js';
+import { protect, freelancerOnly, requireSubscription } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.route('/')
-  .get(protect, freelancerOnly, getProposals)
-  .post(protect, freelancerOnly, createProposal);
+  .get(protect, freelancerOnly, requireSubscription, getProposals)
+  .post(protect, freelancerOnly, requireSubscription, createProposal);
 
 router.get('/public/:slug', getPublicProposal);
 
 router.put('/:id/accept', acceptProposal);
 router.put('/:id/reject', rejectProposal);
+
+router.delete('/:id', protect, freelancerOnly, deleteProposal);
 
 export default router;

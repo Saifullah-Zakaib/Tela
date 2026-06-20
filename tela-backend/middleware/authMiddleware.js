@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import { hasActiveSubscription } from '../utils/subscriptionAccess.js';
 
 export const protect = async (req, res, next) => {
   try {
@@ -40,4 +41,21 @@ export const clientOnly = (req, res, next) => {
   } else {
     res.status(403).json({ success: false, message: 'Not authorized as client' });
   }
+};
+
+export const requireSubscription = async (req, res, next) => {
+  if (req.user.role !== 'freelancer') {
+    return next();
+  }
+
+  const user = await User.findById(req.user._id);
+  if (!hasActiveSubscription(user)) {
+    return res.status(402).json({
+      success: false,
+      message: 'Active subscription or trial required',
+      code: 'SUBSCRIPTION_REQUIRED',
+    });
+  }
+
+  next();
 };

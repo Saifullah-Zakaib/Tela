@@ -19,6 +19,8 @@ import fileRoutes from './routes/fileRoutes.js';
 import invoiceRoutes from './routes/invoiceRoutes.js';
 import proposalRoutes from './routes/proposalRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import subscriptionRoutes from './routes/subscriptionRoutes.js';
+import contactRoutes from './routes/contactRoutes.js';
 
 connectDB();
 
@@ -33,8 +35,9 @@ app.use(cors({
   credentials: true
 }));
 
-// Stripe webhook route (needs raw body)
+// Stripe webhook routes (need raw body)
 app.use('/api/invoices/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/subscriptions/webhook', express.raw({ type: 'application/json' }));
 
 // Body parser
 app.use(express.json());
@@ -53,6 +56,8 @@ app.use('/api/projects/:projectId/files', fileRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/proposals', proposalRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/contact', contactRoutes);
 
 // Health check
 app.get('/', (req, res) => {

@@ -83,7 +83,22 @@ const userSchema = new mongoose.Schema({
   },
   emailVerificationToken: String,
   resetPasswordToken: String,
-  resetPasswordExpire: Date
+  resetPasswordExpire: Date,
+  subscriptionPlan: {
+    type: String,
+    enum: ['none', 'trial', 'pro', 'custom'],
+    default: 'none',
+  },
+  subscriptionStatus: {
+    type: String,
+    enum: ['none', 'active', 'canceled', 'past_due'],
+    default: 'none',
+  },
+  trialStartedAt: Date,
+  trialEndsAt: Date,
+  subscriptionEndsAt: Date,
+  stripeCustomerId: String,
+  stripeSubscriptionId: String,
 }, {
   timestamps: true
 });

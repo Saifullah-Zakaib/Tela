@@ -6,17 +6,17 @@ import {
   updateClient,
   deleteClient
 } from '../controllers/clientController.js';
-import { protect, freelancerOnly } from '../middleware/authMiddleware.js';
+import { protect, freelancerOnly, requireSubscription } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.route('/')
-  .get(protect, freelancerOnly, getClients)
-  .post(protect, freelancerOnly, createClient);
+  .get(protect, freelancerOnly, requireSubscription, getClients)
+  .post(protect, freelancerOnly, requireSubscription, createClient);
 
 router.route('/:id')
-  .get(protect, freelancerOnly, getClient)
-  .put(protect, freelancerOnly, updateClient)
-  .delete(protect, freelancerOnly, deleteClient);
+  .get(protect, freelancerOnly, requireSubscription, getClient)
+  .put(protect, freelancerOnly, requireSubscription, updateClient)
+  .delete(protect, freelancerOnly, requireSubscription, deleteClient);
 
 export default router;
