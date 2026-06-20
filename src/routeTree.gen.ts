@@ -13,18 +13,25 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ProposalsRouteImport } from './routes/proposals'
 import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PortalRouteImport } from './routes/portal'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InvoicesRouteImport } from './routes/invoices'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as ContactSalesRouteImport } from './routes/contact-sales'
 import { Route as ClientsRouteImport } from './routes/clients'
 import { Route as ClientSetupRouteImport } from './routes/client-setup'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ProposalsIndexRouteImport } from './routes/proposals.index'
+import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
+import { Route as PortalIndexRouteImport } from './routes/portal.index'
+import { Route as InvoicesIndexRouteImport } from './routes/invoices.index'
 import { Route as SetPasswordTokenRouteImport } from './routes/set-password.$token'
 import { Route as ProposalsNewRouteImport } from './routes/proposals.new'
 import { Route as ProjectsIdRouteImport } from './routes/projects.$id'
 import { Route as InvoicesNewRouteImport } from './routes/invoices.new'
 import { Route as ClientsIdRouteImport } from './routes/clients.$id'
+import { Route as ProposalsPublicSlugRouteImport } from './routes/proposals.public.$slug'
 import { Route as PortalProjectsIdRouteImport } from './routes/portal.projects.$id'
 
 const SignupRoute = SignupRouteImport.update({
@@ -47,6 +54,11 @@ const ProjectsRoute = ProjectsRouteImport.update({
   path: '/projects',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PortalRoute = PortalRouteImport.update({
   id: '/portal',
   path: '/portal',
@@ -67,6 +79,11 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ContactSalesRoute = ContactSalesRouteImport.update({
+  id: '/contact-sales',
+  path: '/contact-sales',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ClientsRoute = ClientsRouteImport.update({
   id: '/clients',
   path: '/clients',
@@ -81,6 +98,26 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ProposalsIndexRoute = ProposalsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ProposalsRoute,
+} as any)
+const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ProjectsRoute,
+} as any)
+const PortalIndexRoute = PortalIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PortalRoute,
+} as any)
+const InvoicesIndexRoute = InvoicesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => InvoicesRoute,
 } as any)
 const SetPasswordTokenRoute = SetPasswordTokenRouteImport.update({
   id: '/set-password/$token',
@@ -107,6 +144,11 @@ const ClientsIdRoute = ClientsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => ClientsRoute,
 } as any)
+const ProposalsPublicSlugRoute = ProposalsPublicSlugRouteImport.update({
+  id: '/public/$slug',
+  path: '/public/$slug',
+  getParentRoute: () => ProposalsRoute,
+} as any)
 const PortalProjectsIdRoute = PortalProjectsIdRouteImport.update({
   id: '/projects/$id',
   path: '/projects/$id',
@@ -117,10 +159,12 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/client-setup': typeof ClientSetupRoute
   '/clients': typeof ClientsRouteWithChildren
+  '/contact-sales': typeof ContactSalesRoute
   '/dashboard': typeof DashboardRoute
   '/invoices': typeof InvoicesRouteWithChildren
   '/login': typeof LoginRoute
   '/portal': typeof PortalRouteWithChildren
+  '/pricing': typeof PricingRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/proposals': typeof ProposalsRouteWithChildren
   '/settings': typeof SettingsRoute
@@ -130,18 +174,21 @@ export interface FileRoutesByFullPath {
   '/projects/$id': typeof ProjectsIdRoute
   '/proposals/new': typeof ProposalsNewRoute
   '/set-password/$token': typeof SetPasswordTokenRoute
+  '/invoices/': typeof InvoicesIndexRoute
+  '/portal/': typeof PortalIndexRoute
+  '/projects/': typeof ProjectsIndexRoute
+  '/proposals/': typeof ProposalsIndexRoute
   '/portal/projects/$id': typeof PortalProjectsIdRoute
+  '/proposals/public/$slug': typeof ProposalsPublicSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/client-setup': typeof ClientSetupRoute
   '/clients': typeof ClientsRouteWithChildren
+  '/contact-sales': typeof ContactSalesRoute
   '/dashboard': typeof DashboardRoute
-  '/invoices': typeof InvoicesRouteWithChildren
   '/login': typeof LoginRoute
-  '/portal': typeof PortalRouteWithChildren
-  '/projects': typeof ProjectsRouteWithChildren
-  '/proposals': typeof ProposalsRouteWithChildren
+  '/pricing': typeof PricingRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/clients/$id': typeof ClientsIdRoute
@@ -149,17 +196,24 @@ export interface FileRoutesByTo {
   '/projects/$id': typeof ProjectsIdRoute
   '/proposals/new': typeof ProposalsNewRoute
   '/set-password/$token': typeof SetPasswordTokenRoute
+  '/invoices': typeof InvoicesIndexRoute
+  '/portal': typeof PortalIndexRoute
+  '/projects': typeof ProjectsIndexRoute
+  '/proposals': typeof ProposalsIndexRoute
   '/portal/projects/$id': typeof PortalProjectsIdRoute
+  '/proposals/public/$slug': typeof ProposalsPublicSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/client-setup': typeof ClientSetupRoute
   '/clients': typeof ClientsRouteWithChildren
+  '/contact-sales': typeof ContactSalesRoute
   '/dashboard': typeof DashboardRoute
   '/invoices': typeof InvoicesRouteWithChildren
   '/login': typeof LoginRoute
   '/portal': typeof PortalRouteWithChildren
+  '/pricing': typeof PricingRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/proposals': typeof ProposalsRouteWithChildren
   '/settings': typeof SettingsRoute
@@ -169,7 +223,12 @@ export interface FileRoutesById {
   '/projects/$id': typeof ProjectsIdRoute
   '/proposals/new': typeof ProposalsNewRoute
   '/set-password/$token': typeof SetPasswordTokenRoute
+  '/invoices/': typeof InvoicesIndexRoute
+  '/portal/': typeof PortalIndexRoute
+  '/projects/': typeof ProjectsIndexRoute
+  '/proposals/': typeof ProposalsIndexRoute
   '/portal/projects/$id': typeof PortalProjectsIdRoute
+  '/proposals/public/$slug': typeof ProposalsPublicSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -177,10 +236,12 @@ export interface FileRouteTypes {
     | '/'
     | '/client-setup'
     | '/clients'
+    | '/contact-sales'
     | '/dashboard'
     | '/invoices'
     | '/login'
     | '/portal'
+    | '/pricing'
     | '/projects'
     | '/proposals'
     | '/settings'
@@ -190,18 +251,21 @@ export interface FileRouteTypes {
     | '/projects/$id'
     | '/proposals/new'
     | '/set-password/$token'
+    | '/invoices/'
+    | '/portal/'
+    | '/projects/'
+    | '/proposals/'
     | '/portal/projects/$id'
+    | '/proposals/public/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/client-setup'
     | '/clients'
+    | '/contact-sales'
     | '/dashboard'
-    | '/invoices'
     | '/login'
-    | '/portal'
-    | '/projects'
-    | '/proposals'
+    | '/pricing'
     | '/settings'
     | '/signup'
     | '/clients/$id'
@@ -209,16 +273,23 @@ export interface FileRouteTypes {
     | '/projects/$id'
     | '/proposals/new'
     | '/set-password/$token'
+    | '/invoices'
+    | '/portal'
+    | '/projects'
+    | '/proposals'
     | '/portal/projects/$id'
+    | '/proposals/public/$slug'
   id:
     | '__root__'
     | '/'
     | '/client-setup'
     | '/clients'
+    | '/contact-sales'
     | '/dashboard'
     | '/invoices'
     | '/login'
     | '/portal'
+    | '/pricing'
     | '/projects'
     | '/proposals'
     | '/settings'
@@ -228,17 +299,24 @@ export interface FileRouteTypes {
     | '/projects/$id'
     | '/proposals/new'
     | '/set-password/$token'
+    | '/invoices/'
+    | '/portal/'
+    | '/projects/'
+    | '/proposals/'
     | '/portal/projects/$id'
+    | '/proposals/public/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ClientSetupRoute: typeof ClientSetupRoute
   ClientsRoute: typeof ClientsRouteWithChildren
+  ContactSalesRoute: typeof ContactSalesRoute
   DashboardRoute: typeof DashboardRoute
   InvoicesRoute: typeof InvoicesRouteWithChildren
   LoginRoute: typeof LoginRoute
   PortalRoute: typeof PortalRouteWithChildren
+  PricingRoute: typeof PricingRoute
   ProjectsRoute: typeof ProjectsRouteWithChildren
   ProposalsRoute: typeof ProposalsRouteWithChildren
   SettingsRoute: typeof SettingsRoute
@@ -276,6 +354,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/portal': {
       id: '/portal'
       path: '/portal'
@@ -304,6 +389,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/contact-sales': {
+      id: '/contact-sales'
+      path: '/contact-sales'
+      fullPath: '/contact-sales'
+      preLoaderRoute: typeof ContactSalesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/clients': {
       id: '/clients'
       path: '/clients'
@@ -324,6 +416,34 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/proposals/': {
+      id: '/proposals/'
+      path: '/'
+      fullPath: '/proposals/'
+      preLoaderRoute: typeof ProposalsIndexRouteImport
+      parentRoute: typeof ProposalsRoute
+    }
+    '/projects/': {
+      id: '/projects/'
+      path: '/'
+      fullPath: '/projects/'
+      preLoaderRoute: typeof ProjectsIndexRouteImport
+      parentRoute: typeof ProjectsRoute
+    }
+    '/portal/': {
+      id: '/portal/'
+      path: '/'
+      fullPath: '/portal/'
+      preLoaderRoute: typeof PortalIndexRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/invoices/': {
+      id: '/invoices/'
+      path: '/'
+      fullPath: '/invoices/'
+      preLoaderRoute: typeof InvoicesIndexRouteImport
+      parentRoute: typeof InvoicesRoute
     }
     '/set-password/$token': {
       id: '/set-password/$token'
@@ -360,6 +480,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClientsIdRouteImport
       parentRoute: typeof ClientsRoute
     }
+    '/proposals/public/$slug': {
+      id: '/proposals/public/$slug'
+      path: '/public/$slug'
+      fullPath: '/proposals/public/$slug'
+      preLoaderRoute: typeof ProposalsPublicSlugRouteImport
+      parentRoute: typeof ProposalsRoute
+    }
     '/portal/projects/$id': {
       id: '/portal/projects/$id'
       path: '/projects/$id'
@@ -383,10 +510,12 @@ const ClientsRouteWithChildren =
 
 interface InvoicesRouteChildren {
   InvoicesNewRoute: typeof InvoicesNewRoute
+  InvoicesIndexRoute: typeof InvoicesIndexRoute
 }
 
 const InvoicesRouteChildren: InvoicesRouteChildren = {
   InvoicesNewRoute: InvoicesNewRoute,
+  InvoicesIndexRoute: InvoicesIndexRoute,
 }
 
 const InvoicesRouteWithChildren = InvoicesRoute._addFileChildren(
@@ -394,10 +523,12 @@ const InvoicesRouteWithChildren = InvoicesRoute._addFileChildren(
 )
 
 interface PortalRouteChildren {
+  PortalIndexRoute: typeof PortalIndexRoute
   PortalProjectsIdRoute: typeof PortalProjectsIdRoute
 }
 
 const PortalRouteChildren: PortalRouteChildren = {
+  PortalIndexRoute: PortalIndexRoute,
   PortalProjectsIdRoute: PortalProjectsIdRoute,
 }
 
@@ -406,10 +537,12 @@ const PortalRouteWithChildren =
 
 interface ProjectsRouteChildren {
   ProjectsIdRoute: typeof ProjectsIdRoute
+  ProjectsIndexRoute: typeof ProjectsIndexRoute
 }
 
 const ProjectsRouteChildren: ProjectsRouteChildren = {
   ProjectsIdRoute: ProjectsIdRoute,
+  ProjectsIndexRoute: ProjectsIndexRoute,
 }
 
 const ProjectsRouteWithChildren = ProjectsRoute._addFileChildren(
@@ -418,10 +551,14 @@ const ProjectsRouteWithChildren = ProjectsRoute._addFileChildren(
 
 interface ProposalsRouteChildren {
   ProposalsNewRoute: typeof ProposalsNewRoute
+  ProposalsIndexRoute: typeof ProposalsIndexRoute
+  ProposalsPublicSlugRoute: typeof ProposalsPublicSlugRoute
 }
 
 const ProposalsRouteChildren: ProposalsRouteChildren = {
   ProposalsNewRoute: ProposalsNewRoute,
+  ProposalsIndexRoute: ProposalsIndexRoute,
+  ProposalsPublicSlugRoute: ProposalsPublicSlugRoute,
 }
 
 const ProposalsRouteWithChildren = ProposalsRoute._addFileChildren(
@@ -432,10 +569,12 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ClientSetupRoute: ClientSetupRoute,
   ClientsRoute: ClientsRouteWithChildren,
+  ContactSalesRoute: ContactSalesRoute,
   DashboardRoute: DashboardRoute,
   InvoicesRoute: InvoicesRouteWithChildren,
   LoginRoute: LoginRoute,
   PortalRoute: PortalRouteWithChildren,
+  PricingRoute: PricingRoute,
   ProjectsRoute: ProjectsRouteWithChildren,
   ProposalsRoute: ProposalsRouteWithChildren,
   SettingsRoute: SettingsRoute,

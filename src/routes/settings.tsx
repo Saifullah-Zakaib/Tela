@@ -7,8 +7,11 @@ import { Avatar, Card } from "@/components/portal/Bits";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { authApi } from "@/lib/api";
+import { freelancerAppBeforeLoad } from "@/lib/route-guards";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export const Route = createFileRoute("/settings")({
+  beforeLoad: freelancerAppBeforeLoad,
   head: () => ({ meta: [{ title: "Settings — Tela" }] }),
   component: Settings,
 });
@@ -16,7 +19,12 @@ export const Route = createFileRoute("/settings")({
 const TABS = ["profile", "branding", "email", "notifications", "security"] as const;
 
 function Settings() {
+  const { user: authUser, isAuthenticated } = useRequireAuth('freelancer');
   const [tab, setTab] = useState<(typeof TABS)[number]>("profile");
+  
+  if (!isAuthenticated) {
+    return <DashboardLayout title="Loading..."><div>Loading...</div></DashboardLayout>;
+  }
   return (
     <DashboardLayout title="Settings">
       <h2 className="text-2xl font-bold tracking-tight">Settings</h2>

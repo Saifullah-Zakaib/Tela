@@ -16,6 +16,8 @@ import {
   Star,
 } from "lucide-react";
 import { useTheme } from "@/lib/theme";
+import { useAuth } from "@/lib/auth-context";
+import { hasActiveSubscription } from "@/lib/subscription";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -31,8 +33,25 @@ export const Route = createFileRoute("/")({
 
 function Landing() {
   const { theme, toggle } = useTheme();
+  const { freelancer, loading } = useAuth();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  const hasFreelancerAccess =
+    mounted && !loading && !!freelancer && hasActiveSubscription(freelancer);
+  const isOnTrial = hasFreelancerAccess && freelancer?.subscriptionPlan === "trial";
+
+  const primaryCta = hasFreelancerAccess
+    ? isOnTrial
+      ? { to: "/pricing" as const, label: "Upgrade to Pro" }
+      : { to: "/dashboard" as const, label: "Go to Dashboard" }
+    : { to: "/signup" as const, label: "Start free trial" };
+
+  const headerCta = hasFreelancerAccess
+    ? isOnTrial
+      ? { to: "/pricing" as const, label: "Upgrade to Pro" }
+      : { to: "/dashboard" as const, label: "Dashboard" }
+    : { to: "/signup" as const, label: "Start free" };
 
   return (
     <div className="min-h-screen bg-background text-foreground antialiased selection:bg-primary/30">
@@ -51,7 +70,7 @@ function Landing() {
             <a href="#workflow" className="transition hover:text-foreground">Workflow</a>
             <a href="#customers" className="transition hover:text-foreground">Customers</a>
             <a href="#pricing" className="transition hover:text-foreground">Pricing</a>
-            <a href="#changelog" className="transition hover:text-foreground">Changelog</a>
+            <Link to="/dashboard" className="transition hover:text-foreground">Dashboard</Link>
           </nav>
           <div className="ml-auto flex items-center gap-1">
             <button
@@ -61,14 +80,16 @@ function Landing() {
             >
               {mounted && theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
-            <Link to="/login" className="hidden rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground md:inline">
-              Sign in
-            </Link>
+            {!hasFreelancerAccess && (
+              <Link to="/login" className="hidden rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground md:inline">
+                Sign in
+              </Link>
+            )}
             <Link
-              to="/signup"
+              to={headerCta.to}
               className="inline-flex items-center gap-1 rounded-md bg-foreground px-3 py-1.5 text-sm font-medium text-background transition hover:opacity-90"
             >
-              Start free <ArrowRight className="h-3.5 w-3.5" />
+              {headerCta.label} <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
         </div>
@@ -96,18 +117,14 @@ function Landing() {
             </p>
             <div className="mt-10 flex flex-wrap items-center gap-3">
               <Link
-                to="/signup"
+                to={primaryCta.to}
                 className="inline-flex items-center gap-2 rounded-md bg-foreground px-5 py-2.5 text-sm font-medium text-background transition hover:opacity-90"
               >
-                Start free trial <ArrowRight className="h-4 w-4" />
+                {primaryCta.label} <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link
-                to="/dashboard"
-                className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-5 py-2.5 text-sm font-medium transition hover:bg-muted"
-              >
-                Open live demo
-              </Link>
-              <span className="text-xs text-muted-foreground">No card · 14 days Pro</span>
+              {!hasFreelancerAccess && (
+                <span className="text-xs text-muted-foreground">No card · 14 days Pro</span>
+              )}
             </div>
           </div>
 
@@ -377,12 +394,14 @@ function Landing() {
             </div>
             <div className="flex flex-col gap-3 md:col-span-4 md:items-end">
               <Link
-                to="/signup"
+                to={primaryCta.to}
                 className="inline-flex items-center gap-2 rounded-md bg-foreground px-6 py-3 text-sm font-medium text-background transition hover:opacity-90"
               >
-                Start free trial <ArrowRight className="h-4 w-4" />
+                {primaryCta.label} <ArrowRight className="h-4 w-4" />
               </Link>
-              <p className="text-xs text-muted-foreground">14 days Pro · no card · cancel anytime</p>
+              {!hasFreelancerAccess && (
+                <p className="text-xs text-muted-foreground">14 days Pro · no card · cancel anytime</p>
+              )}
             </div>
           </div>
         </div>

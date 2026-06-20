@@ -5,8 +5,10 @@ import { toast } from "sonner";
 import { AuthShell, Field, inputCls } from "@/components/portal/AuthShell";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
+import { signupBeforeLoad } from "@/lib/route-guards";
 
 export const Route = createFileRoute("/signup")({
+  beforeLoad: signupBeforeLoad,
   head: () => ({ meta: [{ title: "Sign up — Tela" }] }),
   component: Signup,
 });
@@ -32,8 +34,8 @@ function Signup() {
     setLoading(true);
     try {
       await register(f.name, f.email, f.pwd);
-      toast.success("Account created. Welcome to Tela! Check your email to verify.");
-      nav({ to: "/dashboard" });
+      toast.success("Account created. Choose a plan to get started.");
+      nav({ to: "/pricing" });
     } catch (error: any) {
       toast.error(error.message || "Registration failed");
       if (error.message.toLowerCase().includes("exists")) {

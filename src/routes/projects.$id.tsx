@@ -1,14 +1,21 @@
-import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
-import { ArrowLeft, CheckCircle2, Circle, Clock, Paperclip, Send, FileText as FileIcon, Image as ImageIcon, Archive, Download, Eye, Trash2, Edit, X } from "lucide-react";
-import { useState } from "react";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
+import {
+  ArrowLeft, CheckCircle2, Clock, Paperclip, Send, FileText as FileIcon,
+  Image as ImageIcon, Archive, Download, Eye, Plus, Upload, Play, Receipt,
+  X, Calendar, DollarSign, Sparkles, MoreHorizontal, ChevronRight, Trash2,
+} from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/portal/DashboardLayout";
-import { Avatar, Card, StatusBadge } from "@/components/portal/Bits";
+import { Avatar, Card, StatusBadge, EmptyState } from "@/components/portal/Bits";
 import { projectsApi, milestonesApi, feedApi, filesApi, invoicesApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { cn } from "@/lib/utils";
-import { type Status } from "@/lib/data";
+import type { Status } from "@/lib/data";
+import { normalizeProjectStatus } from "@/lib/data";
+import { useFeedUnread } from "@/lib/feed-read";
+import { cn, minDateInputValue, isPastDateInput } from "@/lib/utils";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export const Route = createFileRoute("/projects/$id")({
   head: () => ({ meta: [{ title: "Project — Tela" }] }),
@@ -19,90 +26,195 @@ export const Route = createFileRoute("/projects/$id")({
 });
 
 const TABS = ["overview", "feed", "files", "invoices"] as const;
+type Tab = (typeof TABS)[number];
+
+const fmtMoney = (amt: number) => `$${amt.toLocaleString()}`;
+
+function normalizeStatus(status: string): Status {
+  if (status === 'in-progress') return 'in_progress';
+  if (status === 'planning') return 'pending';
+  return status as Status;
+}
+
+function formatDate(date?: string | Date) {
+  if (!date) return 'No deadline';
+  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function filesForMilestone(files: any[], milestoneId: string) {
+  return files.filter((f) => {
+    const mid = f.milestone?._id || f.milestone;
+    return mid?.toString() === milestoneId;
+  });
+}
 
 function ProjectDetail() {
+  const { user: authUser, isAuthenticated } = useRequireAuth('freelancer');
   const { id } = Route.useParams();
-  const router = useRouter();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<(typeof TABS)[number]>("overview");
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const { user, activeRole } = useAuth();
+  const [tab, setTab] = useState<Tab>("overview");
+  const [showNew, setShowNew] = useState(false);
+  const [uploadFor, setUploadFor] = useState<any | null>(null);
+  const [draft, setDraft] = useState("");
 
-  const { data: projectData, isLoading } = useQuery({
+  if (!isAuthenticated) {
+    return <DashboardLayout title="Loading..."><div>Loading...</div></DashboardLayout>;
+  }
+
+  const { data: projectData, isLoading, error } = useQuery({
     queryKey: ['project', id],
-    queryFn: () => projectsApi.getById(id)
+    queryFn: () => projectsApi.getById(id),
+    retry: false,
   });
 
   const { data: milestonesData } = useQuery({
     queryKey: ['milestones', id],
     queryFn: () => milestonesApi.getAll(id),
-    enabled: !!id
+    enabled: !!id,
   });
 
   const { data: feedData } = useQuery({
     queryKey: ['feed', id],
     queryFn: () => feedApi.getMessages(id),
-    enabled: !!id
+    enabled: !!id,
+    refetchInterval: 15000,
   });
 
   const { data: filesData } = useQuery({
     queryKey: ['files', id],
     queryFn: () => filesApi.getAll(id),
-    enabled: !!id
+    enabled: !!id,
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: () => projectsApi.delete(id),
-    onSuccess: () => {
-      toast.success('Project deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      router.navigate({ to: '/projects' });
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to delete project');
-    }
+  const { data: invoicesData } = useQuery({
+    queryKey: ['invoices', id],
+    queryFn: () => invoicesApi.getAll({ project: id } as any),
+    enabled: !!id,
   });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ milestoneId, data }: { milestoneId: string; data: any }) =>
+      milestonesApi.update(id, milestoneId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['milestones', id] });
+      queryClient.invalidateQueries({ queryKey: ['project', id] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+    onError: (err: any) => toast.error(err.message || 'Failed to update milestone'),
+  });
+
+  const deleteFileMutation = useMutation({
+    mutationFn: (fileId: string) => filesApi.delete(id, fileId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['files', id] });
+      toast.success('Deliverable deleted');
+    },
+    onError: (err: any) => toast.error(err.message || 'Failed to delete deliverable'),
+  });
+
+  const p = projectData?.data;
+  const ms = (milestonesData?.data || []).map((m: any) => ({ ...m, status: normalizeStatus(m.status) }));
+  const msgs = feedData?.data || [];
+  const fileList = filesData?.data || [];
+  const invs = invoicesData?.data || [];
+  const feedRole = activeRole === 'client' ? 'client' : 'freelancer';
+  const unreadFeedCount = useFeedUnread(id, feedRole, msgs, user?._id, tab === 'feed');
+
+  const totals = useMemo(() => {
+    const billed = ms.reduce((s: number, m: any) => s + (m.amount || 0), 0);
+    const paid = invs.filter((i: any) => i.status === 'paid').reduce((s: number, i: any) => s + (i.total || 0), 0);
+    const approved = ms.filter((m: any) => m.status === 'approved').length;
+    return { billed, paid, approved, total: ms.length };
+  }, [ms, invs]);
 
   if (isLoading) {
     return <DashboardLayout title="Loading..."><div className="text-center text-muted-foreground">Loading project...</div></DashboardLayout>;
   }
 
-  const p = projectData?.data;
+  if (error) {
+    return <DashboardLayout title="Error"><div className="text-center text-destructive">Error loading project: {(error as any).message}</div></DashboardLayout>;
+  }
+
   if (!p) throw notFound();
 
-  const ms = milestonesData?.data || [];
-  const msgs = feedData?.data || [];
-  const files = filesData?.data || [];
+  const client = p.client;
 
-  const fmtMoney = (amt: number) => `$${amt.toLocaleString()}`;
+  const startWork = (m: any) => {
+    updateMutation.mutate({ milestoneId: m._id, data: { status: 'in_progress' } });
+    toast.success(`Started "${m.name}"`);
+  };
+
+  const markComplete = (m: any) => {
+    updateMutation.mutate({ milestoneId: m._id, data: { status: 'under_review' } });
+    toast.success('Marked for review', { description: 'Client has been notified.' });
+  };
+
+  const createInvoice = (m: any) => {
+    navigate({
+      to: "/invoices/new",
+      search: {
+        project: id,
+        milestone: m._id,
+        client: client._id,
+      },
+    });
+  };
+
+  const postUpdate = async () => {
+    if (!draft.trim()) return;
+    try {
+      const formData = new FormData();
+      formData.append('message', draft.trim());
+      await feedApi.createMessage(id, formData);
+      setDraft('');
+      queryClient.invalidateQueries({ queryKey: ['feed', id] });
+      toast.success('Update posted');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to post update');
+    }
+  };
 
   return (
     <DashboardLayout title={p.name}>
-      <div className="flex items-center justify-between">
-        <Link to="/projects" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" /> Back to projects
-        </Link>
-        <button
-          onClick={() => setDeleteOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-destructive px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10"
-        >
-          <Trash2 className="h-3.5 w-3.5" /> Delete Project
-        </button>
-      </div>
+      <Link to="/projects" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="h-4 w-4" /> Back to projects
+      </Link>
 
-      <Card className="mt-4 p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="min-w-0">
+      <Card className="mt-4 overflow-hidden p-0">
+        <div className="grid gap-px bg-border md:grid-cols-[1.4fr_1fr]">
+          <div className="bg-card p-6">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-2xl font-bold">{p.name}</h2>
-              <StatusBadge status={p.status} />
+              <h2 className="text-2xl font-bold tracking-tight">{p.name}</h2>
+              <StatusBadge status={normalizeProjectStatus(p.status)} />
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">{p.client?.company || p.client?.name}</p>
+            <div className="mt-3 flex items-center gap-3">
+              <Avatar name={client?.name ?? ''} className="h-8 w-8" />
+              <div className="text-sm">
+                <p className="font-medium">{client?.name}</p>
+                <p className="text-xs text-muted-foreground">{client?.company} • {client?.email}</p>
+              </div>
+            </div>
+            <div className="mt-5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Project progress</span>
+                <span className="font-semibold tabular-nums">{totals.approved}/{totals.total} milestones approved</span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${totals.total ? (totals.approved / totals.total) * 100 : 0}%` }} />
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-6">
-            <div><p className="text-xs text-muted-foreground">Deadline</p><p className="text-sm font-semibold">{p.deadline ? new Date(p.deadline).toLocaleDateString() : 'No deadline'}</p></div>
-            <div><p className="text-xs text-muted-foreground">Budget</p><p className="text-sm font-semibold">{fmtMoney(p.budget || 0)}</p></div>
-            <div><p className="text-xs text-muted-foreground">Progress</p><p className="text-sm font-semibold">{p.progress || 0}%</p></div>
+          <div className="grid grid-cols-3 bg-card">
+            <Stat label="Budget" value={fmtMoney(p.budget || 0)} />
+            <Stat label="Billed" value={fmtMoney(totals.billed)} />
+            <Stat label="Paid" value={fmtMoney(totals.paid)} accent />
           </div>
+        </div>
+        <div className="flex items-center justify-between border-t border-border bg-muted/30 px-6 py-3 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> Deadline {formatDate(p.deadline)}</span>
+          <span className="inline-flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Shared with {client?.name}</span>
         </div>
       </Card>
 
@@ -110,286 +222,313 @@ function ProjectDetail() {
         {TABS.map((t) => (
           <button key={t} onClick={() => setTab(t)} className={cn("relative px-4 py-2.5 text-sm font-medium capitalize transition", tab === t ? "text-foreground" : "text-muted-foreground hover:text-foreground")}>
             {t}
+            {t === "feed" && unreadFeedCount > 0 && (
+              <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                {unreadFeedCount}
+              </span>
+            )}
+            {t === "files" && fileList.length > 0 && <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{fileList.length}</span>}
+            {t === "invoices" && invs.length > 0 && <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{invs.length}</span>}
             {tab === t && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary" />}
           </button>
         ))}
       </div>
 
       <div className="mt-6">
-        {tab === "overview" && <OverviewTab projectId={id} milestones={ms} />}
-        {tab === "feed" && <FeedTab projectId={id} messages={msgs} />}
-        {tab === "files" && <FilesTab projectId={id} files={files} />}
-        {tab === "invoices" && <InvoicesTab projectId={id} />}
-      </div>
-
-      {deleteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDeleteOpen(false)} />
-          <Card className="relative w-full max-w-md m-4 p-6">
-            <h3 className="text-lg font-semibold mb-2">Delete Project</h3>
-            <p className="text-sm text-muted-foreground mb-6">
-              Are you sure you want to delete this project? This action cannot be undone.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setDeleteOpen(false)}
-                className="flex-1 rounded-xl border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => deleteMutation.mutate()}
-                disabled={deleteMutation.isPending}
-                className="flex-1 rounded-xl bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground hover:opacity-90 disabled:opacity-50"
-              >
-                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+        {tab === "overview" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold">Milestones</h3>
+                <p className="text-xs text-muted-foreground">Break the project into deliverable steps. Each unlocks an invoice when approved.</p>
+              </div>
+              <button onClick={() => setShowNew(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">
+                <Plus className="h-4 w-4" /> Add Milestone
               </button>
             </div>
-          </Card>
-        </div>
-      )}
+
+            {ms.length === 0 ? (
+              <EmptyState
+                icon={<Sparkles className="h-6 w-6" />}
+                title="No milestones yet"
+                description="Break the project into 3–5 milestones so your client knows exactly what to expect and when."
+                action={<button onClick={() => setShowNew(true)} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">Create first milestone</button>}
+              />
+            ) : (
+              <ol className="relative space-y-3 before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-px before:bg-border">
+                {ms.map((m: any, i: number) => (
+                  <MilestoneRow
+                    key={m._id}
+                    index={i + 1}
+                    m={m}
+                    deliverables={filesForMilestone(fileList, m._id)}
+                    invoice={invs.find((iv: any) => iv.milestone === m._id || iv.milestone?._id === m._id)}
+                    onStart={() => startWork(m)}
+                    onUpload={() => setUploadFor(m)}
+                    onComplete={() => markComplete(m)}
+                    onInvoice={() => createInvoice(m)}
+                    onDeleteDeliverable={(fileId) => deleteFileMutation.mutate(fileId)}
+                    deletingDeliverable={deleteFileMutation.isPending}
+                    updating={updateMutation.isPending}
+                  />
+                ))}
+              </ol>
+            )}
+          </div>
+        )}
+
+        {tab === "feed" && <FeedTab messages={msgs} draft={draft} setDraft={setDraft} onPost={postUpdate} />}
+        {tab === "files" && <FilesTab projectId={id} files={fileList} milestones={ms} />}
+        {tab === "invoices" && <InvoicesTab invoices={invs} milestones={ms} />}
+      </div>
+
+      {showNew && <NewMilestoneModal projectId={id} onClose={() => setShowNew(false)} />}
+      {uploadFor && <UploadModal projectId={id} milestone={uploadFor} onClose={() => setUploadFor(null)} />}
     </DashboardLayout>
   );
 }
 
-
-function OverviewTab({ projectId, milestones }: { projectId: string; milestones: any[] }) {
-  const queryClient = useQueryClient();
-  const [addOpen, setAddOpen] = useState(false);
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => 
-      milestonesApi.update(projectId, id, data),
-    onSuccess: () => {
-      toast.success('Milestone updated');
-      queryClient.invalidateQueries({ queryKey: ['milestones', projectId] });
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to update milestone');
-    }
-  });
-
-  const handleMarkComplete = (milestoneId: string) => {
-    updateMutation.mutate({
-      id: milestoneId,
-      data: { status: 'completed' }
-    });
-  };
-
-  const fmtMoney = (amt: number) => `$${amt.toLocaleString()}`;
-
+function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <>
-      <Card className="p-6">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold">Milestone Timeline</h3>
-          <button
-            onClick={() => setAddOpen(true)}
-            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90"
-          >
-            Add Milestone
-          </button>
-        </div>
-        {milestones.length === 0 ? (
-          <p className="mt-6 text-center text-sm text-muted-foreground">No milestones yet.</p>
-        ) : (
-          <ol className="mt-6 space-y-6">
-            {milestones.map((m, i) => {
-              const done = m.status === "approved" || m.status === "completed";
-              const active = m.status === "in_progress" || m.status === "under_review";
-              return (
-                <li key={m._id} className="relative flex gap-4 pl-10">
-                  {i < milestones.length - 1 && <span className="absolute left-[15px] top-8 h-full w-px bg-border" />}
-                  <span className={cn(
-                    "absolute left-0 top-1 grid h-8 w-8 place-items-center rounded-full border-2",
-                    done ? "border-success bg-success text-success-foreground" : active ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground",
-                  )}>
-                    {done ? <CheckCircle2 className="h-4 w-4" /> : active ? <Clock className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
-                  </span>
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-medium">{m.name}</p>
-                      <StatusBadge status={m.status} />
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Due {m.dueDate ? new Date(m.dueDate).toLocaleDateString() : 'No deadline'} • {fmtMoney(m.amount || 0)}
-                    </p>
-                    {active && (
-                      <button 
-                        onClick={() => handleMarkComplete(m._id)}
-                        disabled={updateMutation.isPending}
-                        className="mt-3 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                      >
-                        Mark Complete
-                      </button>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </Card>
-      {addOpen && <AddMilestoneDialog projectId={projectId} onClose={() => setAddOpen(false)} />}
-    </>
+    <div className="p-5">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={cn("mt-1 text-lg font-bold tabular-nums", accent && "text-success")}>{value}</p>
+    </div>
   );
 }
 
-function AddMilestoneDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+function MilestoneRow({ index, m, deliverables, invoice, onStart, onUpload, onComplete, onInvoice, onDeleteDeliverable, deletingDeliverable, updating }: {
+  index: number;
+  m: any;
+  deliverables: any[];
+  invoice?: any;
+  onStart: () => void;
+  onUpload: () => void;
+  onComplete: () => void;
+  onInvoice: () => void;
+  onDeleteDeliverable: (fileId: string) => void;
+  deletingDeliverable: boolean;
+  updating: boolean;
+}) {
+  const [open, setOpen] = useState(m.status === 'in_progress' || m.status === 'under_review');
+  const done = m.status === 'approved';
+  const active = m.status === 'in_progress' || m.status === 'under_review';
+
+  return (
+    <li className="relative">
+      <div className={cn(
+        "ml-10 rounded-xl border bg-card transition",
+        done ? "border-success/30" : active ? "border-primary/40 shadow-sm" : "border-border",
+      )}>
+        <span className={cn(
+          "absolute -left-0 top-3 grid h-10 w-10 place-items-center rounded-full border-2 text-xs font-bold",
+          done ? "border-success bg-success text-success-foreground" :
+          active ? "border-primary bg-primary text-primary-foreground" :
+          "border-border bg-background text-muted-foreground",
+        )}>
+          {done ? <CheckCircle2 className="h-5 w-5" /> : active ? <Clock className="h-5 w-5" /> : index}
+        </span>
+
+        <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-3 p-4 text-left">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold">{m.name}</p>
+              <StatusBadge status={m.status} />
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Due {formatDate(m.dueDate)} • <span className="font-semibold text-foreground">{fmtMoney(m.amount || 0)}</span>
+              {deliverables.length > 0 && <> • {deliverables.length} deliverable{deliverables.length > 1 ? 's' : ''}</>}
+            </p>
+          </div>
+          <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground transition", open && "rotate-90")} />
+        </button>
+
+        {open && (
+          <div className="border-t border-border p-4 space-y-3">
+            {m.description && <p className="text-sm text-muted-foreground">{m.description}</p>}
+
+            {deliverables.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Deliverables</p>
+                <ul className="space-y-1.5">
+                  {deliverables.map((d: any) => (
+                    <li key={d._id} className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5">
+                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <a
+                        href={d.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="min-w-0 flex-1 truncate text-xs font-medium hover:underline"
+                      >
+                        {d.fileName || d.name}
+                      </a>
+                      <a
+                        href={d.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                        title="View file"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteDeliverable(d._id)}
+                        disabled={deletingDeliverable}
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                        title="Delete deliverable"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {invoice && (
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 p-2.5 text-xs">
+                <Receipt className="h-4 w-4 text-primary" />
+                <span className="font-medium">{invoice.invoiceNumber}</span>
+                <span className="text-muted-foreground">• {fmtMoney(invoice.total || 0)}</span>
+                <StatusBadge status={invoice.status} className="ml-auto" />
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {(m.status === 'pending' || m.status === 'planning') && (
+                <button onClick={onStart} disabled={updating} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">
+                  <Play className="h-3.5 w-3.5" /> Start work
+                </button>
+              )}
+              {(m.status === 'in_progress' || m.status === 'under_review') && (
+                <button onClick={onUpload} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold hover:bg-muted">
+                  <Upload className="h-3.5 w-3.5" /> Upload deliverable
+                </button>
+              )}
+              {m.status === 'in_progress' && (
+                <button onClick={onComplete} disabled={updating} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Mark complete
+                </button>
+              )}
+              {m.status === 'under_review' && (
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" /> Waiting for client approval
+                </span>
+              )}
+              {m.status === 'approved' && !invoice && (
+                <button onClick={onInvoice} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90">
+                  <Receipt className="h-3.5 w-3.5" /> Create invoice
+                </button>
+              )}
+              <button className="ml-auto grid h-7 w-7 place-items-center rounded-lg text-muted-foreground hover:bg-muted"><MoreHorizontal className="h-4 w-4" /></button>
+            </div>
+          </div>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function NewMilestoneModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const queryClient = useQueryClient();
+  const [name, setName] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    amount: '',
-    dueDate: '',
-    status: 'planning' as Status,
-  });
+  const valid = name.trim() && dueDate && Number(amount) > 0;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
+    if (!valid) return;
+    if (isPastDateInput(dueDate)) {
+      toast.error('Milestone due date cannot be in the past');
+      return;
+    }
     setLoading(true);
-
     try {
-      await milestonesApi.create(projectId, {
-        ...formData,
-        amount: Number(formData.amount)
-      });
-      toast.success('Milestone added successfully');
+      await milestonesApi.create(projectId, { name: name.trim(), dueDate, amount: Number(amount) });
       queryClient.invalidateQueries({ queryKey: ['milestones', projectId] });
+      toast.success('Milestone added', { description: `${name.trim()} • ${fmtMoney(Number(amount))}` });
       onClose();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to add milestone');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to add milestone');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <Card className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto m-4 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Add Milestone</h3>
-          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg hover:bg-muted">
-            <X className="h-4 w-4" />
+    <Modal title="New milestone" onClose={onClose}>
+      <div className="space-y-3">
+        <Field label="Name">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. UI Design" className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Due date" icon={<Calendar className="h-3.5 w-3.5" />}>
+            <input type="date" min={minDateInputValue()} value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          </Field>
+          <Field label="Amount" icon={<DollarSign className="h-3.5 w-3.5" />}>
+            <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="300" className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          </Field>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted">Cancel</button>
+          <button disabled={!valid || loading} onClick={handleSubmit} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">
+            {loading ? 'Creating...' : 'Create'}
           </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1.5">Milestone Name*</label>
-            <input
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Design Phase"
-              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none focus:border-primary"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1.5">Description</label>
-            <textarea
-              rows={3}
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Milestone description..."
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none resize-none focus:border-primary"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1.5">Amount*</label>
-              <input
-                type="number"
-                required
-                value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                placeholder="2500"
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none focus:border-primary"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1.5">Due Date</label>
-              <input
-                type="date"
-                value={formData.dueDate}
-                onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none focus:border-primary"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1.5">Status</label>
-            <select
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value as Status })}
-              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none focus:border-primary"
-            >
-              <option value="planning">Planning</option>
-              <option value="in_progress">In Progress</option>
-              <option value="under_review">Under Review</option>
-              <option value="completed">Completed</option>
-              <option value="approved">Approved</option>
-            </select>
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-xl border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
-            >
-              {loading ? 'Adding...' : 'Add Milestone'}
-            </button>
-          </div>
-        </form>
-      </Card>
-    </div>
+      </div>
+    </Modal>
   );
 }
 
-function FeedTab({ projectId, messages }: { projectId: string; messages: any[] }) {
-  const { user } = useAuth();
+function UploadModal({ projectId, milestone, onClose }: { projectId: string; milestone: any; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
 
-  const handleSend = async () => {
-    if (!message.trim()) return;
-    
-    setSending(true);
+  const handleUpload = async (file: File) => {
+    setUploading(true);
     try {
       const formData = new FormData();
-      formData.append('message', message);
-      
-      await feedApi.createMessage(projectId, formData);
-      setMessage('');
-      queryClient.invalidateQueries({ queryKey: ['feed', projectId] });
-      toast.success('Message sent');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to send message');
+      formData.append('file', file);
+      formData.append('milestoneId', milestone._id);
+      await filesApi.upload(projectId, formData);
+      queryClient.invalidateQueries({ queryKey: ['files', projectId] });
+      toast.success('Deliverable uploaded', { description: file.name });
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload file');
     } finally {
-      setSending(false);
+      setUploading(false);
     }
   };
 
   return (
+    <Modal title={`Upload deliverable — ${milestone.name}`} onClose={onClose}>
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="w-full rounded-xl border border-dashed border-border bg-muted/30 px-4 py-8 text-center hover:bg-muted/50"
+        >
+          <Upload className="mx-auto h-6 w-6 text-muted-foreground" />
+          <p className="mt-2 text-sm font-medium">{uploading ? 'Uploading...' : 'Drop files here or click to browse'}</p>
+          <p className="text-xs text-muted-foreground">PDF, ZIP, PNG, JPG up to 50MB</p>
+        </button>
+        <input ref={inputRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
+      </div>
+    </Modal>
+  );
+}
+
+function FeedTab({ messages, draft, setDraft, onPost }: { messages: any[]; draft: string; setDraft: (v: string) => void; onPost: () => void }) {
+  const { user } = useAuth();
+  return (
     <Card className="flex h-[600px] flex-col">
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
         {messages.length === 0 ? (
-          <p className="text-center text-sm text-muted-foreground">No messages yet. Start the conversation!</p>
+          <p className="text-center text-sm text-muted-foreground">No messages yet. Post an update for your client!</p>
         ) : (
           messages.map((m) => {
             const mine = m.sender?._id === user?._id;
@@ -399,26 +538,9 @@ function FeedTab({ projectId, messages }: { projectId: string; messages: any[] }
                 <div className={cn("max-w-md", mine && "text-right")}>
                   <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
                     <span className="font-medium text-foreground">{m.sender?.name}</span>
-                    <span>{new Date(m.createdAt).toLocaleTimeString()}</span>
+                    <span>{new Date(m.createdAt).toLocaleString()}</span>
                   </div>
-                  <div className={cn("rounded-2xl px-4 py-2.5 text-sm", mine ? "bg-primary text-primary-foreground" : "bg-muted")}>
-                    {m.message}
-                  </div>
-                  {m.attachments && m.attachments.length > 0 && (
-                    <div className={cn("mt-2 flex flex-wrap gap-1.5", mine && "justify-end")}>
-                      {m.attachments.map((a: any, idx: number) => (
-                        <a 
-                          key={idx}
-                          href={a.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs hover:bg-muted"
-                        >
-                          <Paperclip className="h-3 w-3" /> {a.name}
-                        </a>
-                      ))}
-                    </div>
-                  )}
+                  <div className={cn("rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap", mine ? "bg-primary text-primary-foreground" : "bg-muted")}>{m.message}</div>
                 </div>
               </div>
             );
@@ -427,171 +549,148 @@ function FeedTab({ projectId, messages }: { projectId: string; messages: any[] }
       </div>
       <div className="border-t border-border p-3">
         <div className="flex items-center gap-2 rounded-xl border border-input bg-background px-3 py-2">
-          <input 
-            placeholder="Type a message…" 
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && !sending && handleSend()}
-            className="flex-1 bg-transparent text-sm outline-none" 
+          <Paperclip className="h-4 w-4 text-muted-foreground" />
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && onPost()}
+            placeholder="Post an update for your client…"
+            className="flex-1 bg-transparent text-sm outline-none"
           />
-          <button 
-            onClick={handleSend}
-            disabled={sending || !message.trim()}
-            className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
-          >
-            <Send className="h-4 w-4" />
-          </button>
+          <button onClick={onPost} className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground hover:opacity-90"><Send className="h-4 w-4" /></button>
         </div>
       </div>
     </Card>
   );
 }
 
-function FilesTab({ projectId, files }: { projectId: string; files: any[] }) {
+function FilesTab({ projectId, files, milestones }: { projectId: string; files: any[]; milestones: any[] }) {
   const queryClient = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const handleUpload = async (file: File) => {
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
-      
       await filesApi.upload(projectId, formData);
       queryClient.invalidateQueries({ queryKey: ['files', projectId] });
-      toast.success('File uploaded successfully');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to upload file');
+      toast.success('File uploaded');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload');
     } finally {
       setUploading(false);
-      e.target.value = '';
     }
   };
 
-  const deleteMutation = useMutation({
-    mutationFn: (fileId: string) => filesApi.delete(projectId, fileId),
-    onSuccess: () => {
-      toast.success('File deleted');
-      queryClient.invalidateQueries({ queryKey: ['files', projectId] });
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to delete file');
-    }
-  });
+  if (files.length === 0) {
+    return (
+      <EmptyState
+        icon={<Upload className="h-6 w-6" />}
+        title="No deliverables yet"
+        description="Upload deliverables from a milestone to share them with your client."
+        action={
+          <button onClick={() => inputRef.current?.click()} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">
+            {uploading ? 'Uploading...' : 'Upload file'}
+          </button>
+        }
+      />
+    );
+  }
 
   return (
     <>
+      <input ref={inputRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
       <div className="mb-4">
-        <label className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 cursor-pointer">
+        <button onClick={() => inputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">
           {uploading ? 'Uploading...' : 'Upload File'}
-          <input 
-            type="file" 
-            onChange={handleFileUpload} 
-            disabled={uploading}
-            className="hidden" 
-          />
-        </label>
+        </button>
       </div>
-
-      {files.length === 0 ? (
-        <Card className="p-8 text-center">
-          <p className="text-sm text-muted-foreground">No files uploaded yet.</p>
-        </Card>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {files.map((f) => {
-            const Icon = f.name.endsWith('.pdf') ? FileIcon : f.name.endsWith('.zip') ? Archive : ImageIcon;
-            return (
-              <Card key={f._id} className="flex flex-col gap-3 p-4">
-                <div className="grid h-14 w-14 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <Icon className="h-6 w-6" />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{f.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(f.uploadedAt).toLocaleDateString()} • {f.uploadedBy?.name}
-                  </p>
-                </div>
-                <div className="flex gap-1.5">
-                  <a
-                    href={f.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-border py-1.5 text-xs font-medium hover:bg-muted"
-                  >
-                    <Download className="h-3.5 w-3.5" /> Download
-                  </a>
-                  <button
-                    onClick={() => deleteMutation.mutate(f._id)}
-                    disabled={deleteMutation.isPending}
-                    className="grid h-7 w-7 place-items-center rounded-lg border border-destructive text-destructive hover:bg-destructive/10"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {files.map((f) => {
+          const Icon = (f.fileName || f.name || '').endsWith('.pdf') ? FileIcon : (f.fileName || f.name || '').endsWith('.zip') ? Archive : ImageIcon;
+          return (
+            <Card key={f._id} className="flex flex-col gap-3 p-4">
+              <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="h-5 w-5" /></div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{f.fileName || f.name}</p>
+                <p className="text-xs text-muted-foreground">{f.createdAt ? new Date(f.createdAt).toLocaleDateString() : ''}</p>
+              </div>
+              <a href={f.fileUrl || f.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 rounded-lg border border-border py-1.5 text-xs font-medium hover:bg-muted">
+                <Download className="h-3.5 w-3.5" /> Download
+              </a>
+            </Card>
+          );
+        })}
+      </div>
     </>
   );
 }
 
-function InvoicesTab({ projectId }: { projectId: string }) {
-  const { data: invoicesData } = useQuery({
-    queryKey: ['invoices', projectId],
-    queryFn: () => invoicesApi.getAll({ project: projectId } as any),
-    enabled: !!projectId
-  });
-
-  const invoices = invoicesData?.data || [];
-  const fmtMoney = (amt: number) => `$${amt.toLocaleString()}`;
+function InvoicesTab({ invoices, milestones }: { invoices: any[]; milestones: any[] }) {
+  if (invoices.length === 0) {
+    return (
+      <EmptyState icon={<Receipt className="h-6 w-6" />} title="No invoices yet" description="Once a milestone is approved you can optionally send an invoice from the timeline." />
+    );
+  }
 
   return (
-    <Card className="overflow-hidden">
-      {invoices.length === 0 ? (
-        <div className="p-8 text-center">
-          <p className="text-sm text-muted-foreground">No invoices for this project yet.</p>
-        </div>
-      ) : (
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-muted/40 text-xs uppercase text-muted-foreground">
-            <tr>
-              <th className="px-5 py-2.5 text-left font-medium">Invoice</th>
-              <th className="px-5 py-2.5 text-left font-medium">Amount</th>
-              <th className="px-5 py-2.5 text-left font-medium">Due</th>
-              <th className="px-5 py-2.5 text-left font-medium">Status</th>
-              <th className="px-5 py-2.5 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {invoices.map((i: any) => (
+    <Card className="overflow-hidden p-0">
+      <table className="w-full text-sm">
+        <thead className="border-b border-border bg-muted/40 text-xs uppercase text-muted-foreground">
+          <tr>
+            <th className="px-5 py-2.5 text-left font-medium">Invoice</th>
+            <th className="px-5 py-2.5 text-left font-medium">Milestone</th>
+            <th className="px-5 py-2.5 text-left font-medium">Amount</th>
+            <th className="px-5 py-2.5 text-left font-medium">Due</th>
+            <th className="px-5 py-2.5 text-left font-medium">Status</th>
+            <th className="px-5 py-2.5 text-right font-medium">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoices.map((i) => {
+            const m = milestones.find((x) => x._id === i.milestone || x._id === i.milestone?._id);
+            return (
               <tr key={i._id} className="border-b border-border last:border-0 hover:bg-muted/30">
                 <td className="px-5 py-3 font-medium">{i.invoiceNumber}</td>
-                <td className="px-5 py-3">{fmtMoney(i.amount)}</td>
-                <td className="px-5 py-3 text-muted-foreground">
-                  {i.dueDate ? new Date(i.dueDate).toLocaleDateString() : 'N/A'}
-                </td>
+                <td className="px-5 py-3 text-muted-foreground">{m?.name ?? '—'}</td>
+                <td className="px-5 py-3 font-semibold tabular-nums">{fmtMoney(i.total || 0)}</td>
+                <td className="px-5 py-3 text-muted-foreground">{i.dueDate ? formatDate(i.dueDate) : '—'}</td>
                 <td className="px-5 py-3"><StatusBadge status={i.status} /></td>
                 <td className="px-5 py-3">
                   <div className="flex justify-end gap-1.5">
-                    <Link 
-                      to="/invoices"
-                      className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </Link>
+                    <button title="View" className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-muted"><Eye className="h-3.5 w-3.5" /></button>
                   </div>
                 </td>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            );
+          })}
+        </tbody>
+      </table>
     </Card>
+  );
+}
+
+function Modal({ children, onClose, title }: { children: React.ReactNode; onClose: () => void; title: string }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-background/70 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+          <h3 className="font-semibold">{title}</h3>
+          <button onClick={onClose} className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 flex items-center gap-1 text-xs font-medium text-muted-foreground">{icon}{label}</span>
+      {children}
+    </label>
   );
 }

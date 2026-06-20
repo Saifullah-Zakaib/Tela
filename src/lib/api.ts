@@ -1,28 +1,40 @@
+import { getToken, type AuthRole } from './auth-storage';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public code?: string) {
     super(message);
   }
 }
 
-async function request(endpoint: string, options: RequestInit = {}) {
-  const token = localStorage.getItem('token');
-  
+async function request(endpoint: string, options: RequestInit = {}, authRole?: AuthRole) {
+  const token = getToken(authRole);
+  const isFormData = options.body instanceof FormData;
+
+  const headers: Record<string, string> = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers as Record<string, string> | undefined),
+  };
+
+  // Let the browser set multipart boundary for file uploads
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const config: RequestInit = {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    },
+    headers,
   };
 
   const response = await fetch(`${API_URL}${endpoint}`, config);
-  const data = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  const data = contentType.includes('application/json')
+    ? await response.json()
+    : { message: await response.text() };
 
   if (!response.ok) {
-    throw new ApiError(response.status, data.message || 'An error occurred');
+    throw new ApiError(response.status, data.message || 'An error occurred', data.code as string | undefined);
   }
 
   return data;
@@ -37,6 +49,8 @@ export const authApi = {
     request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
   
   getMe: () => request('/auth/me'),
+
+  getMeAs: (role: AuthRole) => request('/auth/me', {}, role),
   
   updateProfile: (data: any) =>
     request('/auth/update-profile', { method: 'PUT', body: JSON.stringify(data) }),
@@ -81,11 +95,10 @@ export const projectsApi = {
   
   getById: (id: string) => request(`/projects/${id}`),
   
-  create: (formData: FormData) =>
+  create: (data: any) =>
     request('/projects', {
       method: 'POST',
-      body: formData,
-      headers: {}, // Let browser set Content-Type for FormData
+      body: JSON.stringify(data),
     }),
   
   update: (id: string, data: any) =>
@@ -103,6 +116,12 @@ export const milestonesApi = {
   
   update: (projectId: string, id: string, data: any) =>
     request(`/projects/${projectId}/milestones/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  requestChanges: (projectId: string, id: string, message: string) =>
+    request(`/projects/${projectId}/milestones/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ requestChanges: true, message }),
+    }),
   
   delete: (projectId: string, id: string) =>
     request(`/projects/${projectId}/milestones/${id}`, { method: 'DELETE' }),
@@ -137,7 +156,7 @@ export const filesApi = {
 
 // Invoices API
 export const invoicesApi = {
-  getAll: (params?: { page?: number; limit?: number }) => {
+  getAll: (params?: { page?: number; limit?: number; project?: string }) => {
     const query = new URLSearchParams(params as any).toString();
     return request(`/invoices${query ? `?${query}` : ''}`);
   },
@@ -174,6 +193,9 @@ export const proposalsApi = {
   
   reject: (id: string, slug?: string) =>
     request(`/proposals/${id}/reject${slug ? `?slug=${slug}` : ''}`, { method: 'PUT' }),
+  
+  delete: (id: string) =>
+    request(`/proposals/${id}`, { method: 'DELETE' }),
 };
 
 // Notifications API
@@ -186,6 +208,38 @@ export const notificationsApi = {
   markAllRead: () => request('/notifications/mark-all-read', { method: 'PUT' }),
   
   markRead: (id: string) => request(`/notifications/${id}/read`, { method: 'PUT' }),
+};
+
+// Subscription API
+export const subscriptionApi = {
+  startTrial: () =>
+    request('/subscriptions/start-trial', { method: 'POST' }, 'freelancer'),
+
+  createCheckout: () =>
+    request('/subscriptions/checkout', { method: 'POST' }, 'freelancer'),
+
+  confirmCheckout: (sessionId: string) =>
+    request('/subscriptions/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    }, 'freelancer'),
+
+  getStatus: () =>
+    request('/subscriptions/status', {}, 'freelancer'),
+};
+
+// Contact API
+export const contactApi = {
+  submitSales: (data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    company: string;
+    phone?: string;
+    teamSize?: string;
+    message?: string;
+    interestedIn?: string;
+  }) => request('/contact/sales', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export { ApiError };

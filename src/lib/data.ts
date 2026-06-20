@@ -23,6 +23,12 @@ export const STATUS_LABEL: Record<Status, string> = {
   sent: "Sent",
 };
 
+export function normalizeProjectStatus(status: string): Status {
+  const normalized = String(status || 'planning').toLowerCase().replace(/-/g, '_');
+  if (normalized in STATUS_LABEL) return normalized as Status;
+  return 'planning';
+}
+
 export const clients = [
   {
     id: "c1",

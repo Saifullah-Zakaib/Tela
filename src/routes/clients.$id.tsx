@@ -5,8 +5,11 @@ import { DashboardLayout } from "@/components/portal/DashboardLayout";
 import { Avatar, Card, StatusBadge } from "@/components/portal/Bits";
 import { clientById, projects, invoices, files, fmtMoney } from "@/lib/data";
 import { cn } from "@/lib/utils";
+import { freelancerAppBeforeLoad } from "@/lib/route-guards";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export const Route = createFileRoute("/clients/$id")({
+  beforeLoad: freelancerAppBeforeLoad,
   head: () => ({ meta: [{ title: "Client — Tela" }] }),
   component: ClientDetail,
   notFoundComponent: () => (
@@ -19,7 +22,13 @@ export const Route = createFileRoute("/clients/$id")({
 const TABS = ["projects", "invoices", "files"] as const;
 
 function ClientDetail() {
+  const { user, isAuthenticated } = useRequireAuth('freelancer');
   const { id } = Route.useParams();
+  
+  if (!isAuthenticated) {
+    return <DashboardLayout title="Loading..."><div>Loading...</div></DashboardLayout>;
+  }
+  
   const c = clientById(id);
   if (!c) throw notFound();
   const [tab, setTab] = useState<(typeof TABS)[number]>("projects");

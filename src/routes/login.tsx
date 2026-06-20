@@ -4,15 +4,18 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AuthShell, Field, inputCls } from "@/components/portal/AuthShell";
 import { useAuth } from "@/lib/auth-context";
+import { loginBeforeLoad } from "@/lib/route-guards";
+import { hasActiveSubscription } from "@/lib/subscription";
 
 export const Route = createFileRoute("/login")({
+  beforeLoad: loginBeforeLoad,
   head: () => ({ meta: [{ title: "Login — Tela" }] }),
   component: Login,
 });
 
 function Login() {
   const nav = useNavigate();
-  const { login, user } = useAuth();
+  const { login } = useAuth();
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
@@ -29,21 +32,16 @@ function Login() {
     
     setLoading(true);
     try {
-      await login(email, pwd);
-      
-      // After login, user will be set in context
-      // We need to wait a moment for it to update
-      setTimeout(() => {
-        const userData = JSON.parse(localStorage.getItem('user') || '{"role":"freelancer"}');
-        toast.success("Welcome back!");
-        
-        // Redirect based on role
-        if (userData.role === 'client') {
-          nav({ to: "/portal" });
-        } else {
-          nav({ to: "/dashboard" });
-        }
-      }, 100);
+      const user = await login(email, pwd);
+      toast.success("Welcome back!");
+
+      if (user.role === 'client') {
+        nav({ to: "/portal" });
+      } else if (!hasActiveSubscription(user)) {
+        nav({ to: "/pricing" });
+      } else {
+        nav({ to: "/dashboard" });
+      }
     } catch (error: any) {
       toast.error(error.message || "Invalid credentials");
       setErr({ pwd: "Invalid email or password" });

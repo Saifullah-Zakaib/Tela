@@ -1,14 +1,17 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Mail, Phone, Plus, Search, Users, X } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/portal/DashboardLayout";
 import { Avatar, Card, EmptyState } from "@/components/portal/Bits";
 import { Field, inputCls } from "@/components/portal/AuthShell";
 import { clientsApi, authApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { freelancerAppBeforeLoad } from "@/lib/route-guards";
 
 export const Route = createFileRoute("/clients")({
+  beforeLoad: freelancerAppBeforeLoad,
   head: () => ({ meta: [{ title: "Clients — Tela" }] }),
   component: Clients,
 });
@@ -17,6 +20,20 @@ function Clients() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const router = useRouter();
+  
+  // Client-side auth check
+  useEffect(() => {
+    if (!user) {
+      router.navigate({ to: '/login' });
+    }
+  }, [user, router]);
+
+  // Show loading while checking auth
+  if (!user) {
+    return <DashboardLayout title="Loading..."><div className="text-center text-muted-foreground">Loading...</div></DashboardLayout>;
+  }
   
   const { data, isLoading } = useQuery({
     queryKey: ['clients'],

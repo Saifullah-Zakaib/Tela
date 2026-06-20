@@ -1,15 +1,18 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import {
   Briefcase, FileText, DollarSign, Plus, MessageSquare, FileCheck, FileWarning, Upload, CheckCircle2,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { DashboardLayout } from "@/components/portal/DashboardLayout";
 import { StatusBadge, Card } from "@/components/portal/Bits";
 import { projectsApi, notificationsApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { fmtMoney } from "@/lib/data";
+import { freelancerAppBeforeLoad } from "@/lib/route-guards";
 
 export const Route = createFileRoute("/dashboard")({
+  beforeLoad: freelancerAppBeforeLoad,
   head: () => ({ meta: [{ title: "Dashboard — Tela" }] }),
   component: Dashboard,
 });
@@ -24,6 +27,19 @@ const ICON_MAP: Record<string, any> = {
 
 function Dashboard() {
   const { user } = useAuth();
+  const router = useRouter();
+  
+  // Client-side auth check
+  useEffect(() => {
+    if (!user) {
+      router.navigate({ to: '/login' });
+    }
+  }, [user, router]);
+
+  // Show loading while checking auth
+  if (!user) {
+    return <DashboardLayout title="Loading..."><div className="text-center text-muted-foreground">Loading...</div></DashboardLayout>;
+  }
   
   const { data: projectsData } = useQuery({
     queryKey: ['projects'],
